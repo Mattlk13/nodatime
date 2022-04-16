@@ -107,7 +107,9 @@ namespace NodaTime.Text
 
             // Handle Z-prefix by stripping it, parsing the rest as a normal pattern, then building a special pattern
             // which decides whether or not to delegate.
-            bool zPrefix = patternText.StartsWith("Z");
+            // Note that patternText is guaranteed not to be empty due to the check at the start.
+            // (And assuming we don't add any standard => custom pattern expansions that result in an empty pattern.)
+            bool zPrefix = patternText[0] == 'Z';
 
             var patternBuilder = new SteppedPatternBuilder<Offset, OffsetParseBucket>(formatInfo, () => new OffsetParseBucket());
             patternBuilder.ParseCustomPattern(zPrefix ? patternText.Substring(1) : patternText, PatternCharacterHandlers);
@@ -155,7 +157,7 @@ namespace NodaTime.Text
             public StringBuilder AppendFormat(Offset value, StringBuilder builder)
             {
                 Preconditions.CheckNotNull(builder, nameof(builder));
-                return value == Offset.Zero ? builder.Append("Z") : fullPattern.AppendFormat(value, builder);
+                return value == Offset.Zero ? builder.Append('Z') : fullPattern.AppendFormat(value, builder);
             }
         }
 

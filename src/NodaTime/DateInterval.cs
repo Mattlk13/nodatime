@@ -146,7 +146,7 @@ namespace NodaTime
         /// <exception cref="ArgumentException"><paramref name="interval" /> uses a different
         /// calendar to this date interval.</exception>
         /// <returns><c>true</c> if <paramref name="interval"/> is within this interval; <c>false</c> otherwise.</returns>
-        public bool Contains(DateInterval interval)
+        public bool Contains([ValidatedNotNull] DateInterval interval)
         {
             ValidateInterval(interval);
             return Start <= interval.Start && interval.End <= End;
@@ -157,9 +157,9 @@ namespace NodaTime
         /// </summary>
         /// <value>The length of this date interval in days.</value>
         public int Length =>
-            // Period.DaysBetween will give us the exclusive result, so we need to add 1
+            // Period.InternalDaysBetween will give us the exclusive result, so we need to add 1
             // to include the end date.
-            Period.DaysBetween(Start, End) + 1;
+            Period.InternalDaysBetween(Start, End) + 1;
 
         /// <summary>
         /// Gets the calendar system of the dates in this interval.
@@ -204,7 +204,7 @@ namespace NodaTime
         /// </returns>
         /// <exception cref="ArgumentException"><paramref name="interval" /> uses a different
         /// calendar to this date interval.</exception>
-        public DateInterval? Intersection(DateInterval interval) =>
+        public DateInterval? Intersection([ValidatedNotNull] DateInterval interval) =>
             Contains(interval) ? interval
                 : interval.Contains(this) ? this
                 : interval.Contains(Start) ? new DateInterval(Start, interval.End)
@@ -220,7 +220,7 @@ namespace NodaTime
         /// instance, in the case the intervals overlap or are contiguous; a null reference otherwise.
         /// </returns>
         /// <exception cref="ArgumentException"><paramref name="interval" /> uses a different calendar to this date interval.</exception>
-        public DateInterval? Union(DateInterval interval)
+        public DateInterval? Union([ValidatedNotNull] DateInterval interval)
         {
             ValidateInterval(interval);
 
@@ -230,9 +230,9 @@ namespace NodaTime
             // Check whether the length of the interval we *would* construct is greater
             // than the sum of the lengths - if it is, there's a day in that candidate union
             // that isn't in either interval. Note the absence of "+ 1" and the use of >=
-            // - it's equivalent to Period.DaysBetween(...) + 1 > Length + interval.Length,
+            // - it's equivalent to Period.InternalDaysBetween(...) + 1 > Length + interval.Length,
             // but with fewer operations.
-            return Period.DaysBetween(start, end) >= Length + interval.Length
+            return Period.InternalDaysBetween(start, end) >= Length + interval.Length
                 ? null
                 : new DateInterval(start, end);
         }

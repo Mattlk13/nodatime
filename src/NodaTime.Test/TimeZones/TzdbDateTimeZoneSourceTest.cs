@@ -28,7 +28,7 @@ namespace NodaTime.Test.TimeZones
         [Test]
         public void CanLoadNodaTimeResourceFromOnePointOneRelease()
         {
-            var assembly = typeof(TzdbDateTimeZoneSourceTest).GetTypeInfo().Assembly;
+            var assembly = typeof(TzdbDateTimeZoneSourceTest).Assembly;
             TzdbDateTimeZoneSource source;
             using (Stream stream = assembly.GetManifestResourceStream("NodaTime.Test.TestData.Tzdb2013bFromNodaTime1.1.nzd")!)
             {
@@ -57,7 +57,7 @@ namespace NodaTime.Test.TimeZones
             Assert.AreEqual(expectedLocal, inJersey.LocalDateTime);
 
             // Test ZoneLocations.
-            var france = source.ZoneLocations.Single(g => g.CountryName == "France");
+            var france = source.ZoneLocations!.Single(g => g.CountryName == "France");
             // Tolerance of about 2 seconds
             Assert.AreEqual(48.86666, france.Latitude, 0.00055);
             Assert.AreEqual(2.3333, france.Longitude, 0.00055);
@@ -133,7 +133,7 @@ namespace NodaTime.Test.TimeZones
         [Test]
         public void ZoneLocations_ContainsFrance()
         {
-            var zoneLocations = TzdbDateTimeZoneSource.Default.ZoneLocations;
+            var zoneLocations = TzdbDateTimeZoneSource.Default.ZoneLocations!;
             var france = zoneLocations.Single(g => g.CountryName == "France");
             // Tolerance of about 2 seconds
             Assert.AreEqual(48.86666, france.Latitude, 0.00055);
@@ -148,7 +148,7 @@ namespace NodaTime.Test.TimeZones
         [Test]
         public void Zone1970Locations_ContainsBritain()
         {
-            var zoneLocations = TzdbDateTimeZoneSource.Default.Zone1970Locations;
+            var zoneLocations = TzdbDateTimeZoneSource.Default.Zone1970Locations!;
             var britain = zoneLocations.Single(g => g.ZoneId == "Europe/London");
             // Tolerance of about 2 seconds
             Assert.AreEqual(51.5083, britain.Latitude, 0.00055);
@@ -172,7 +172,7 @@ namespace NodaTime.Test.TimeZones
         [Test]
         public void ZoneLocations_ContainsResolute()
         {
-            var zoneLocations = TzdbDateTimeZoneSource.Default.ZoneLocations;
+            var zoneLocations = TzdbDateTimeZoneSource.Default.ZoneLocations!;
             var resolute = zoneLocations.Single(g => g.ZoneId == "America/Resolute");
             // Tolerance of about 2 seconds
             Assert.AreEqual(74.69555, resolute.Latitude, 0.00055);
@@ -186,7 +186,7 @@ namespace NodaTime.Test.TimeZones
         public void TzdbVersion()
         {
             var source = TzdbDateTimeZoneSource.Default;
-            StringAssert.StartsWith("201", source.TzdbVersion);
+            StringAssert.StartsWith("20", source.TzdbVersion);
         }
 
         [Test]
@@ -200,7 +200,7 @@ namespace NodaTime.Test.TimeZones
         public void VersionId()
         {
             var source = TzdbDateTimeZoneSource.Default;
-            StringAssert.StartsWith("TZDB: " + source.TzdbVersion, source.VersionId);
+            StringAssert.StartsWith($"TZDB: {source.TzdbVersion}", source.VersionId);
         }
 
         [Test]
@@ -218,22 +218,14 @@ namespace NodaTime.Test.TimeZones
         public void GuessZoneIdByTransitionsUncached(NamedWrapper<TimeZoneInfo> bclZoneWrapper)
         {
             var bclZone = bclZoneWrapper.Value;
-            // As of May 4th 2018, the Windows time zone database on Jon's laptop has caught up with this,
-            // but the one on AppVeyor hasn't. Keep skipping it for now.
-            if (bclZone.Id == "Namibia Standard Time")
+            // As of September 25th 2021, the Windows time zone database hasn't caught up
+            // with the Samoa change in TZDB 2021b. Skip it for now.
+            if (bclZone.Id == "Samoa Standard Time")
             {
                 return;
             }
 
-            // As of May 4th 2018, the Windows time zone database hasn't caught up
-            // with the North Korea change in TZDB 2018e.
-            if (bclZone.Id == "North Korea Standard Time")
-            {
-                return;
-            }
-
-            string? id = TzdbDateTimeZoneSource.Default.GuessZoneIdByTransitionsUncached(bclZone,
-                TzdbDefaultZonesForIdGuessZoneIdByTransitionsUncached);
+            string? id = TzdbDateTimeZoneSource.GuessZoneIdByTransitionsUncached(bclZone, TzdbDefaultZonesForIdGuessZoneIdByTransitionsUncached);
 
             // Unmappable zones may not be mapped, or may be mapped to something reasonably accurate.
             // We don't mind either way.
@@ -301,7 +293,7 @@ namespace NodaTime.Test.TimeZones
         public void MapTimeZoneInfoId(string timeZoneInfoId, int standardUtc, string expectedId)
         {
             var zoneInfo = TimeZoneInfo.CreateCustomTimeZone(timeZoneInfoId, TimeSpan.FromHours(standardUtc),
-                "Ignored display name", "Standard name for " + timeZoneInfoId);
+                "Ignored display name", $"Standard name for {timeZoneInfoId}");
             var mappedId = TzdbDateTimeZoneSource.Default.MapTimeZoneInfoId(zoneInfo);
             Assert.AreEqual(expectedId, mappedId);
 
@@ -507,7 +499,7 @@ namespace NodaTime.Test.TimeZones
         }
 
         [Test]
-        public void TzbdToWindowsIds()
+        public void TzdbToWindowsIds()
         {
             var source = CreateComplexMappingSource();
             var actual = source.TzdbToWindowsIds;
@@ -564,8 +556,8 @@ namespace NodaTime.Test.TimeZones
         public void UtcMappings()
         {
             var source = TzdbDateTimeZoneSource.Default;
-            // Note: not Etc/UTC as TimeZoneConverter does.
-            Assert.AreEqual("Etc/GMT", source.WindowsToTzdbIds["UTC"]);
+            // Note: was Etc/GMT before CLDR v39.
+            Assert.AreEqual("Etc/UTC", source.WindowsToTzdbIds["UTC"]);
 
             Assert.AreEqual("UTC", source.TzdbToWindowsIds["Etc/UTC"]);
             // We follow the link

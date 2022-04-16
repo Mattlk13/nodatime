@@ -6,16 +6,20 @@ using CommandLine;
 using NodaTime.TimeZones;
 using NodaTime.TimeZones.Cldr;
 using NodaTime.TzdbCompiler.Tzdb;
+using NodaTime.Xml;
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml;
 
 namespace NodaTime.TzdbCompiler
 {
     /// <summary>
     /// Main entry point for the time zone information compiler. In theory we could support
     /// multiple sources and formats but currently we only support one:
-    /// http://www.twinsun.com/tz/tz-link.htm. This system refers to it as TZDB.
+    /// https://www.iana.org/time-zones. This system refers to it as TZDB.
     /// This also requires a windowsZone.xml file from the Unicode CLDR repository, to
     /// map Windows time zone names to TZDB IDs.
     /// </summary>
@@ -26,7 +30,7 @@ namespace NodaTime.TzdbCompiler
         /// </summary>
         /// <param name="arguments">The command line arguments. Each compiler defines its own.</param>
         /// <returns>0 for success, non-0 for error.</returns>
-        private static int Main(string[] arguments)
+        private static async Task<int> Main(string[] arguments)
         {
             CompilerOptions options = new CompilerOptions();
             ICommandLineParser parser = new CommandLineParser(new CommandLineParserSettings(Console.Error) { MutuallyExclusive = true });
@@ -36,7 +40,7 @@ namespace NodaTime.TzdbCompiler
             }
 
             var tzdbCompiler = new TzdbZoneInfoCompiler();
-            var tzdb = tzdbCompiler.Compile(options.SourceDirectoryName!);
+            var tzdb = await tzdbCompiler.CompileAsync(options.SourceDirectoryName!);
             tzdb.LogCounts();
             if (options.ZoneId != null)
             {
@@ -61,6 +65,17 @@ namespace NodaTime.TzdbCompiler
                 Console.WriteLine("Reading generated data and validating...");
                 var source = Read(options);
                 source.Validate();
+            }
+
+            if (options.XmlSchema is object)
+            {
+                Console.WriteLine($"Writing XML schema to {options.XmlSchema}");
+                var source = Read(options);
+                var provider = new DateTimeZoneCache(source);
+                XmlSerializationSettings.DateTimeZoneProvider = provider;
+                var settings = new XmlWriterSettings { Indent = true, NewLineChars = "\n", Encoding = new UTF8Encoding() };
+                using var xmlWriter = XmlWriter.Create(options.XmlSchema, settings);
+                XmlSchemaDefinition.NodaTimeXmlSchema.Write(xmlWriter);
             }
             return 0;
         }
@@ -89,7 +104,11 @@ namespace NodaTime.TzdbCompiler
                 throw new Exception($"{mappingPath} does not contain any XML files");
             }
             var allFiles = xmlFiles
+                // Expect that we've ordered the files so that this gives "most recent first",
+                // to handle consecutive CLDR versions that have the same TZDB version.
+                .OrderByDescending(file => file, StringComparer.Ordinal)
                 .Select(file => CldrWindowsZonesParser.Parse(file))
+                // Note: this is stable, so files with the same TZDB version will stay in reverse filename order.
                 .OrderByDescending(zones => zones.TzdbVersion)
                 .ToList();
 
@@ -131,7 +150,7 @@ namespace NodaTime.TzdbCompiler
 
         private static TzdbDateTimeZoneSource Read(CompilerOptions options)
         {
-            string file = Path.ChangeExtension(options.OutputFileName, "nzd");
+            string file = Path.ChangeExtension(options.OutputFileName!, "nzd");
             using (var stream = File.OpenRead(file))
             {
                 return TzdbDateTimeZoneSource.FromStream(stream);

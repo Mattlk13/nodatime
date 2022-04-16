@@ -3,6 +3,7 @@
 // as found in the LICENSE.txt file.
 
 using System;
+using System.Globalization;
 using System.Linq;
 using NUnit.Framework;
 
@@ -46,6 +47,16 @@ namespace NodaTime.Test
         }
 
         [Test]
+        public void ToDateTimeUnspecified_JulianCalendar()
+        {
+            // Non-Gregorian calendar systems are handled by converting to the same
+            // date, just like the DateTime constructor does.
+            LocalDate noda = new LocalDate(2015, 4, 2, CalendarSystem.Julian);
+            DateTime bcl = new DateTime(2015, 4, 2, 0, 0, 0, 0, new JulianCalendar(), DateTimeKind.Unspecified);
+            Assert.AreEqual(bcl, noda.ToDateTimeUnspecified());
+        }
+
+        [Test]
         public void FromDateTime()
         {
             var expected = new LocalDate(2011, 08, 18);
@@ -76,5 +87,45 @@ namespace NodaTime.Test
             LocalDate start = new LocalDate(1, 1, 1);
             Assert.Throws<ArgumentOutOfRangeException>(() => start.WithCalendar(CalendarSystem.PersianSimple));
         }
+#if NET6_0_OR_GREATER
+        [Test]
+        public void ToDateOnly_Gregorian()
+        {
+            var date = new LocalDate(2011, 8, 5);
+            var expected = new DateOnly(2011, 8, 5);
+            var actual = date.ToDateOnly();
+            Assert.AreEqual(expected, actual);
+        }
+
+        [Test]
+        public void ToDateOnly_NonGregorian()
+        {
+            // Julian calendar is 13 days behind Gregorian calendar in the 21st century
+            var date = new LocalDate(2011, 8, 5, CalendarSystem.Julian);
+            var expected = new DateOnly(2011, 8, 5, new JulianCalendar());
+            var actual = date.ToDateOnly();
+            Assert.AreEqual(expected, actual);
+            var expectedGregorian = new DateOnly(2011, 8, 18);
+            Assert.AreEqual(expectedGregorian, actual);
+        }
+
+        [Test]
+        public void ToDateOnly_OutOfRange()
+        {
+            var date = new LocalDate(0, 12, 31);
+            // While ArgumentOutOfRangeException may not be the absolute ideal exception, it conveys
+            // the right impression, and is consistent with what we do elsewhere.
+            Assert.Throws<ArgumentOutOfRangeException>(() => date.ToDateOnly());
+        }
+
+        [Test]
+        public void FromDateOnly()
+        {
+            var dateOnly = new DateOnly(2011, 8, 18);
+            var expected = new LocalDate(2011, 8, 18);
+            var actual = LocalDate.FromDateOnly(dateOnly);
+            Assert.AreEqual(expected, actual);
+        }
+#endif
     }
 }

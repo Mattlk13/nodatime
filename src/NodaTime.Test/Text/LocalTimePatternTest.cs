@@ -264,6 +264,7 @@ namespace NodaTime.Test.Text
             new Data(14, 15, 16, 789) { StandardPattern = LocalTimePattern.LongExtendedIso, Culture = Cultures.DotTimeSeparator, Text = "14:15:16.789000000", Pattern = "O" },
             new Data(14, 15, 16, 789) { StandardPattern = LocalTimePattern.LongExtendedIso, Culture = Cultures.EnUs, Text = "14:15:16.789000000", Pattern = "O" },
             new Data(14, 15, 16) { StandardPattern = LocalTimePattern.LongExtendedIso, Culture = Cultures.Invariant, Text = "14:15:16.000000000", Pattern = "O" },
+            new Data(14, 15, 16) { StandardPattern = LocalTimePattern.GeneralIso, Culture = Cultures.Invariant, Text = "14:15:16", Pattern = "HH:mm:ss" },
 
             // ------------ Template value tests ----------
             // Mixtures of 12 and 24 hour times
@@ -296,7 +297,7 @@ namespace NodaTime.Test.Text
             // --------------- end of template value tests ----------------------
 
             // Only one of the AM/PM designator is present. We should still be able to work out what is meant, by the presence
-            // or absense of the non-empty one.
+            // or absence of the non-empty one.
             new Data(5, 0, 0) { Culture = AmOnlyCulture, Text = "5 am", Pattern = "h tt" },
             new Data(15, 0, 0) { Culture = AmOnlyCulture, Text = "3 ", Pattern = "h tt", Description = "Implicit PM" },
             new Data(5, 0, 0) { Culture = AmOnlyCulture, Text = "5 a", Pattern = "h t" },
@@ -439,7 +440,7 @@ namespace NodaTime.Test.Text
                     if (cursor.Current < '\u0080')
                     {
                         Assert.IsTrue(ExpectedCharacters.Contains(cursor.Current),
-                            "Pattern '" + pattern + "' contains unquoted, unexpected characters");
+                            $"Pattern '{pattern}' contains unquoted, unexpected characters");
                     }
                 }
             }

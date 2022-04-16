@@ -17,6 +17,11 @@ namespace NodaTime
         public const long NanosecondsPerTick = 100;
 
         /// <summary>
+        /// A constant for the number of nanoseconds in a microsecond. The value of this constant is 1,000.
+        /// </summary>
+        public const long NanosecondsPerMicrosecond = 1000;
+
+        /// <summary>
         /// A constant for the number of nanoseconds in a millisecond. The value of this constant is 1,000,000.
         /// </summary>
         public const long NanosecondsPerMillisecond = 1000000;
@@ -74,6 +79,12 @@ namespace NodaTime
         /// The value of this constant is 6,048,000,000,000.
         /// </summary>
         public const long TicksPerWeek = TicksPerDay * DaysPerWeek;
+
+        /// <summary>
+        /// A constant for the number of microseconds per second.
+        /// The value of this constant is 1,000,000.
+        /// </summary>
+        public const long MicrosecondsPerSecond = 1000000;
 
         /// <summary>
         /// A constant for the number of milliseconds per second.
@@ -176,11 +187,11 @@ namespace NodaTime
         /// <summary>
         /// The number of ticks in a BCL DateTime at the Unix epoch.
         /// </summary>
-        internal static readonly long BclTicksAtUnixEpoch = 621355968000000000;
+        internal const long BclTicksAtUnixEpoch = 621355968000000000;
 
         /// <summary>
         /// The number of days in a BCL DateTime at the Unix epoch.
         /// </summary>
-        internal static readonly int BclDaysAtUnixEpoch = 719162;
+        internal const int BclDaysAtUnixEpoch = 719162;
     }
 }

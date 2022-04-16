@@ -17,6 +17,11 @@ using System.Xml.Schema;
 using System.Xml.Serialization;
 using static NodaTime.NodaConstants;
 
+// Do not nest type X.
+// The rule is somewhat subjective, but more importantly these have been available
+// publicly for a while, so we can't change them now anyway.
+#pragma warning disable CA1034
+
 namespace NodaTime
 {
     /// <summary>
@@ -38,6 +43,7 @@ namespace NodaTime
     /// </remarks>
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
     [TypeConverter(typeof(OffsetDateTimeTypeConverter))]
+    [XmlSchemaProvider(nameof(AddSchema))]
     public readonly struct OffsetDateTime : IEquatable<OffsetDateTime>, IFormattable, IXmlSerializable
     {
         private const int MinBclOffsetMinutes = -14 * MinutesPerHour;
@@ -154,15 +160,15 @@ namespace NodaTime
         public int DayOfYear => localDate.DayOfYear;
 
         /// <summary>
-        /// Gets the hour of day of this offest date and time, in the range 0 to 23 inclusive.
+        /// Gets the hour of day of this offset date and time, in the range 0 to 23 inclusive.
         /// </summary>
-        /// <value>The hour of day of this offest date and time, in the range 0 to 23 inclusive.</value>
+        /// <value>The hour of day of this offset date and time, in the range 0 to 23 inclusive.</value>
         public int Hour => offsetTime.Hour;
 
         /// <summary>
-        /// Gets the hour of the half-day of this offest date and time, in the range 1 to 12 inclusive.
+        /// Gets the hour of the half-day of this offset date and time, in the range 1 to 12 inclusive.
         /// </summary>
-        /// <value>The hour of the half-day of this offest date and time, in the range 1 to 12 inclusive.</value>
+        /// <value>The hour of the half-day of this offset date and time, in the range 1 to 12 inclusive.</value>
         public int ClockHourOfHalfDay => offsetTime.ClockHourOfHalfDay;
 
         /// <summary>
@@ -299,6 +305,12 @@ namespace NodaTime
         /// <para>
         /// If the offset has a non-zero second component, this is truncated as <c>DateTimeOffset</c> has an offset
         /// granularity of minutes.
+        /// </para>
+        /// <para>
+        /// <see cref="DateTimeOffset"/> uses the Gregorian calendar by definition, so the value is implicitly converted
+        /// to the Gregorian calendar first. The result will be the same instant in time (potentially truncated as described
+        /// above), but the values returned by the Year/Month/Day properties of the <see cref="DateTimeOffset"/> may not
+        /// match the Year/Month/Day properties of this value.
         /// </para>
         /// </remarks>
         /// <exception cref="InvalidOperationException">The date/time is outside the range of <c>DateTimeOffset</c>,
@@ -492,12 +504,12 @@ namespace NodaTime
         /// Formats the value of the current instance using the specified pattern.
         /// </summary>
         /// <returns>
-        /// A <see cref="T:System.String" /> containing the value of the current instance in the specified format.
+        /// A <see cref="System.String" /> containing the value of the current instance in the specified format.
         /// </returns>
-        /// <param name="patternText">The <see cref="T:System.String" /> specifying the pattern to use,
+        /// <param name="patternText">The <see cref="System.String" /> specifying the pattern to use,
         /// or null to use the default format pattern ("G").
         /// </param>
-        /// <param name="formatProvider">The <see cref="T:System.IFormatProvider" /> to use when formatting the value,
+        /// <param name="formatProvider">The <see cref="System.IFormatProvider" /> to use when formatting the value,
         /// or null to use the current thread's culture to obtain a format provider.
         /// </param>
         /// <filterpriority>2</filterpriority>
@@ -530,7 +542,7 @@ namespace NodaTime
         public OffsetDateTime Plus(Duration duration) => this + duration;
 
         /// <summary>
-        /// Returns the result of adding a increment of hours to this zoned date and time
+        /// Returns the result of adding a increment of hours to this offset date and time
         /// </summary>
         /// <param name="hours">The number of hours to add</param>
         /// <returns>A new <see cref="OffsetDateTime" /> representing the result of the addition.</returns>
@@ -538,7 +550,7 @@ namespace NodaTime
         public OffsetDateTime PlusHours(int hours) => this + Duration.FromHours(hours);
 
         /// <summary>
-        /// Returns the result of adding an increment of minutes to this zoned date and time
+        /// Returns the result of adding an increment of minutes to this offset date and time
         /// </summary>
         /// <param name="minutes">The number of minutes to add</param>
         /// <returns>A new <see cref="OffsetDateTime" /> representing the result of the addition.</returns>
@@ -546,7 +558,7 @@ namespace NodaTime
         public OffsetDateTime PlusMinutes(int minutes) => this + Duration.FromMinutes(minutes);
 
         /// <summary>
-        /// Returns the result of adding an increment of seconds to this zoned date and time
+        /// Returns the result of adding an increment of seconds to this offset date and time
         /// </summary>
         /// <param name="seconds">The number of seconds to add</param>
         /// <returns>A new <see cref="OffsetDateTime" /> representing the result of the addition.</returns>
@@ -554,7 +566,7 @@ namespace NodaTime
         public OffsetDateTime PlusSeconds(long seconds) => this + Duration.FromSeconds(seconds);
 
         /// <summary>
-        /// Returns the result of adding an increment of milliseconds to this zoned date and time
+        /// Returns the result of adding an increment of milliseconds to this offset date and time
         /// </summary>
         /// <param name="milliseconds">The number of milliseconds to add</param>
         /// <returns>A new <see cref="OffsetDateTime" /> representing the result of the addition.</returns>
@@ -562,7 +574,7 @@ namespace NodaTime
         public OffsetDateTime PlusMilliseconds(long milliseconds) => this + Duration.FromMilliseconds(milliseconds);
 
         /// <summary>
-        /// Returns the result of adding an increment of ticks to this zoned date and time
+        /// Returns the result of adding an increment of ticks to this offset date and time
         /// </summary>
         /// <param name="ticks">The number of ticks to add</param>
         /// <returns>A new <see cref="OffsetDateTime" /> representing the result of the addition.</returns>
@@ -570,7 +582,7 @@ namespace NodaTime
         public OffsetDateTime PlusTicks(long ticks) => this + Duration.FromTicks(ticks);
 
         /// <summary>
-        /// Returns the result of adding an increment of nanoseconds to this zoned date and time
+        /// Returns the result of adding an increment of nanoseconds to this offset date and time
         /// </summary>
         /// <param name="nanoseconds">The number of nanoseconds to add</param>
         /// <returns>A new <see cref="OffsetDateTime" /> representing the result of the addition.</returns>
@@ -829,6 +841,13 @@ namespace NodaTime
         #endregion
 
         #region XML serialization
+        /// <summary>
+        /// Adds the XML schema type describing the structure of the <see cref="OffsetDateTime"/> XML serialization to the given <paramref name="xmlSchemaSet"/>.
+        /// </summary>
+        /// <param name="xmlSchemaSet">The XML schema set provided by <see cref="XmlSchemaExporter"/>.</param>
+        /// <returns>The qualified name of the schema type that was added to the <paramref name="xmlSchemaSet"/>.</returns>
+        public static XmlQualifiedName AddSchema(XmlSchemaSet xmlSchemaSet) => Xml.XmlSchemaDefinition.AddOffsetDateTimeSchemaType(xmlSchemaSet);
+
         /// <inheritdoc />
         XmlSchema IXmlSerializable.GetSchema() => null!; // TODO(nullable): Return XmlSchema? when docfx works with that
 

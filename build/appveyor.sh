@@ -5,6 +5,8 @@
 
 set -e
 
+export ContinuousIntegrationBuild=true
+
 declare -r ROOT=$(realpath $(dirname $0)/..)
 cd $ROOT
 
@@ -12,7 +14,7 @@ dotnet --info
 
 dotnet build -c Release src/NodaTime.sln
 
-dotnet test -c Release src/NodaTime.Test --filter=TestCategory!=Slow
+dotnet test -c Release src/NodaTime.Test
 dotnet test -c Release src/NodaTime.Demo
 
 dotnet build -c Release src/NodaTime.TzdbCompiler

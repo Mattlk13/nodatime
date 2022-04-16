@@ -18,7 +18,7 @@ namespace NodaTime
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Equality is defined in a component-wise fashion: two date intervals are considered equal if their start instants are
+    /// Equality is defined in a component-wise fashion: two intervals are considered equal if their start instants are
     /// equal to each other and their end instants are equal to each other. Ordering between intervals is not defined.
     /// </para>
     /// <para>
@@ -31,6 +31,7 @@ namespace NodaTime
     /// </para>
     /// </remarks>
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
+    [XmlSchemaProvider(nameof(AddSchema))]
     public readonly struct Interval : IEquatable<Interval>, IXmlSerializable
     {
         /// <summary>The start of the interval.</summary>
@@ -210,7 +211,7 @@ namespace NodaTime
         public override string ToString()
         {
             var pattern = InstantPattern.ExtendedIso;
-            return pattern.Format(start) + "/" + pattern.Format(end);
+            return $"{pattern.Format(start)}/{pattern.Format(end)}";
         }
         #endregion
 
@@ -235,6 +236,13 @@ namespace NodaTime
         #endregion
 
         #region XML serialization
+        /// <summary>
+        /// Adds the XML schema type describing the structure of the <see cref="Interval"/> XML serialization to the given <paramref name="xmlSchemaSet"/>.
+        /// </summary>
+        /// <param name="xmlSchemaSet">The XML schema set provided by <see cref="XmlSchemaExporter"/>.</param>
+        /// <returns>The qualified name of the schema type that was added to the <paramref name="xmlSchemaSet"/>.</returns>
+        public static XmlQualifiedName AddSchema(XmlSchemaSet xmlSchemaSet) => Xml.XmlSchemaDefinition.AddIntervalSchemaType(xmlSchemaSet);
+
         /// <inheritdoc />
         XmlSchema IXmlSerializable.GetSchema() => null!; // TODO(nullable): Return XmlSchema? when docfx works with that
 

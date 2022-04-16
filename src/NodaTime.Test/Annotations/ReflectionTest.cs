@@ -19,14 +19,14 @@ namespace NodaTime.Test.Annotations
         {
             Regex conversionName = new Regex("^To([A-Z][a-zA-Z0-9]*)$");
 
-            var badMethods = typeof(Instant).GetTypeInfo().Assembly
+            var badMethods = typeof(Instant).Assembly
                 .DefinedTypes
                 .Where(t => t.IsPublic || t.IsNestedPublic)
                 .OrderBy(t => t.Name)
                 .SelectMany(m => m.DeclaredMethods)
                 .Where(m => m.IsPublic)
                 .Where(m => conversionName.IsMatch(m.Name))
-                .Where(m => !m.Name.StartsWith("To" + m.ReturnType.Name));
+                .Where(m => !m.Name.StartsWith($"To{m.ReturnType.Name}"));
 
             TestHelper.AssertNoFailures(badMethods, m => $"{m.DeclaringType?.Name}.{m.Name}", TestExemptionCategory.ConversionName);
         }

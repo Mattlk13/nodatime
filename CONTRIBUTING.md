@@ -4,11 +4,13 @@ Thanks for your interest in Noda Time. We appreciate all kinds of contributions,
 
 ## Basic Requirements
 
-If you want to contribute to the codebase, you're going to need a text editor or IDE. We recommend [Visual Studio Community 2017](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx) (Windows) or [Visual Studio Code](https://code.visualstudio.com/) (Windows/Linux/macOS).
+If you want to contribute to the codebase, you're going to need a text editor or IDE. We recommend [Visual Studio Community](https://visualstudio.microsoft.com/downloads/) (Windows) or [Visual Studio Code](https://code.visualstudio.com/) (Windows/Linux/macOS).
 
-You're also going to need .NET Core SDK installed - you can download it from [here.](https://www.microsoft.com/net/download/) (For Noda Time 3.0, we're using C# 8, which as of 2018-12-31 means using a preview of .NET Core.)
+[Visual Studio for Mac](https://visualstudio.microsoft.com/vs/mac/) and [JetBrains Rider](https://www.jetbrains.com/rider/) should be fine as well, but we haven't tried developing Noda Time using them.
 
-Please make sure you have a [git client](https://git-scm.com/) installed. If you don't already have a GitHub account, [please create one.](https://github.com/signup/free)
+You're also going to need the .NET / .NET Core SDK installed. Look at the [global.json](global.json) file to see which version of the SDK is currently required, then download it from [here](https://dotnet.microsoft.com/download). (The version required to build and test Noda Time won't always be the most recent version; we generally stick to LTS releases unless there's a compelling reason to upgrade to something else.)
+
+Please make sure you have a [git client](https://git-scm.com/) installed. If you don't already have a GitHub account, [please create one](https://github.com/join).
 
 After you're all set, you can [fork the project](https://help.github.com/articles/fork-a-repo). Then you'll be able to clone your fork, so you can edit the files locally on your machine:
 
@@ -18,7 +20,7 @@ git clone https://github.com/YOUR-USERNAME/nodatime.git
 
 Once you clone the repository, you'll have a [remote repository](https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes) (or simply *remote*) called `origin`, that points to your forked repository on GitHub.
 
-You'll usually want to add another remote, pointing to the original repository on GitHub. It's an acepted convention to call this remote *upstream*. You can do it like this:
+You'll usually want to add another remote, pointing to the original repository on GitHub. It's an accepted convention to call this remote *upstream*. You can do it like this:
 
 ```Text
 git remote add upstream https://github.com/nodatime/nodatime.git
@@ -76,3 +78,11 @@ If your pull request fixes an issue, add a comment with the word "Fixes", "Resol
 >   Fixes #1145
 
 If you need to, feel free to add comments to the PR asking for suggestions or help.
+
+### Bash scripts
+
+### Other scripts
+
+Bash scripts are used for more complex tasks such as updating TZDB. Many contributors will never need to run these scripts, but just occasionally they may be useful when investigating a CI failure.
+
+These should largely work from any bash environment, but the one used by the maintainers is the version included with [Git for Windows](https://git-scm.com/download/win), also sometimes known as "git bash". Please [file an issue](https://github.com/nodatime/nodatime/issues/new) if you need to run a script but have trouble doing so.

@@ -24,6 +24,9 @@ namespace NodaTime.TzdbCompiler
         [Option(null, "windows-override", Required = false, HelpText = "Additional 'override' file providing extra Windows time zone mappings", MutuallyExclusiveSet = "WindowsOverride")]
         public string? WindowsOverride { get; set; }
 
+        [Option("x", "xml-schema", Required = false, HelpText = "Filename to write an XML schema out to")]
+        public string? XmlSchema { get; set; }
+
         [Option("z", "zone",
             Required = false,
             HelpText = "Single zone ID to compile data for, for test purposes. (Incompatible with -o.)",
@@ -33,7 +36,7 @@ namespace NodaTime.TzdbCompiler
         [HelpOption(HelpText = "Display this help screen.")]
         public string GetUsage()
         {
-            var help = new HelpText(new HeadingInfo(typeof(CompilerOptions).Namespace))
+            var help = new HelpText(new HeadingInfo(typeof(CompilerOptions).Namespace!))
             {
                 AdditionalNewLineAfterOption = true,
                 Copyright = new CopyrightInfo("The Noda Time Authors", 2009)

@@ -30,6 +30,7 @@ namespace NodaTime
     /// </remarks>
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
     [TypeConverter(typeof(LocalTimeTypeConverter))]
+    [XmlSchemaProvider(nameof(AddSchema))]
     public readonly struct LocalTime : IEquatable<LocalTime>, IComparable<LocalTime>, IFormattable, IComparable, IXmlSerializable
     {
         /// <summary>
@@ -226,12 +227,20 @@ namespace NodaTime
                 Preconditions.CheckArgumentRange(nameof(second), second, 0, SecondsPerMinute - 1);
                 Preconditions.CheckArgumentRange(nameof(nanosecondWithinSecond), nanosecondWithinSecond, 0, NanosecondsPerSecond - 1);
             }
-            return new LocalTime(unchecked(
+            return FromHourMinuteSecondNanosecondTrusted(hour, minute, second, nanosecondWithinSecond);
+        }
+
+        /// <summary>
+        /// Factory method for creating a local time from the hour of day, minute of hour, second of minute, and nanosecond of second
+        /// where the values have already been validated.
+        /// </summary>
+        internal static LocalTime FromHourMinuteSecondNanosecondTrusted(
+            [Trusted] int hour, [Trusted] int minute, [Trusted] int second, [Trusted] long nanosecondWithinSecond) =>
+            new LocalTime(unchecked(
                 hour * NanosecondsPerHour +
                 minute * NanosecondsPerMinute +
                 second * NanosecondsPerSecond +
                 nanosecondWithinSecond));
-        }
 
         /// <summary>
         /// Constructor only called from other parts of Noda Time - trusted to be the range [0, NanosecondsPerDay).
@@ -611,7 +620,7 @@ namespace NodaTime
         /// <returns>The result of comparing this LocalTime with another one; see <see cref="CompareTo(NodaTime.LocalTime)"/> for general details.
         /// If <paramref name="obj"/> is null, this method returns a value greater than 0.
         /// </returns>
-        int IComparable.CompareTo(object obj)
+        int IComparable.CompareTo(object? obj)
         {
             if (obj is null)
             {
@@ -780,12 +789,12 @@ namespace NodaTime
         /// Formats the value of the current instance using the specified pattern.
         /// </summary>
         /// <returns>
-        /// A <see cref="T:System.String" /> containing the value of the current instance in the specified format.
+        /// A <see cref="System.String" /> containing the value of the current instance in the specified format.
         /// </returns>
-        /// <param name="patternText">The <see cref="T:System.String" /> specifying the pattern to use,
+        /// <param name="patternText">The <see cref="System.String" /> specifying the pattern to use,
         /// or null to use the default format pattern ("T").
         /// </param>
-        /// <param name="formatProvider">The <see cref="T:System.IFormatProvider" /> to use when formatting the value,
+        /// <param name="formatProvider">The <see cref="System.IFormatProvider" /> to use when formatting the value,
         /// or null to use the current thread's culture to obtain a format provider.
         /// </param>
         /// <filterpriority>2</filterpriority>
@@ -794,6 +803,14 @@ namespace NodaTime
         #endregion Formatting
 
         #region XML serialization
+        /// <summary>
+        /// Adds the XML schema type describing the structure of the <see cref="LocalTime"/> XML serialization to the given <paramref name="xmlSchemaSet"/>.
+        /// the <paramref name="xmlSchemaSet"/>.
+        /// </summary>
+        /// <param name="xmlSchemaSet">The XML schema set provided by <see cref="XmlSchemaExporter"/>.</param>
+        /// <returns>The qualified name of the schema type that was added to the <paramref name="xmlSchemaSet"/>.</returns>
+        public static XmlQualifiedName AddSchema(XmlSchemaSet xmlSchemaSet) => Xml.XmlSchemaDefinition.AddLocalTimeSchemaType(xmlSchemaSet);
+
         /// <inheritdoc />
         XmlSchema IXmlSerializable.GetSchema() => null!; // TODO(nullable): Return XmlSchema? when docfx works with that
 
@@ -812,6 +829,27 @@ namespace NodaTime
             Preconditions.CheckNotNull(writer, nameof(writer));
             writer.WriteString(LocalTimePattern.ExtendedIso.Format(this));
         }
+        #endregion
+
+        #region TimeOnly conversions (.NET 6 only)
+#if NET6_0_OR_GREATER
+        /// <summary>
+        /// Converts this value to an equivalent <see cref="TimeOnly"/>.
+        /// </summary>
+        /// <remarks>
+        /// If the value does not fall on a tick boundary, it will be truncated to the earlier tick boundary.
+        /// </remarks>
+        /// <returns>A <see cref="TimeOnly"/> value equivalent to this one.</returns>
+        [Pure]
+        public TimeOnly ToTimeOnly() => new TimeOnly(TickOfDay);
+
+        /// <summary>
+        /// Constructs a <see cref="LocalTime"/> from a <see cref="TimeOnly"/>.
+        /// </summary>
+        /// <param name="time">The time of day to convert.</param>
+        /// <returns>The <see cref="LocalTime"/> equivalent.</returns>
+        public static LocalTime FromTimeOnly(TimeOnly time) => FromTicksSinceMidnight(time.Ticks);
+#endif
         #endregion
     }
 }

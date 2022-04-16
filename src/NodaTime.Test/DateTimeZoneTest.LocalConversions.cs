@@ -108,15 +108,15 @@ namespace NodaTime.Test
         {
             var mapping = zone.MapLocal(localTime);
             Assert.AreEqual(0, mapping.Count);
-            var e = Assert.Throws<SkippedTimeException>(() => mapping.Single());
+            var e = Assert.Throws<SkippedTimeException>(() => mapping.Single())!;
             Assert.AreEqual(localTime, e.LocalDateTime);
             Assert.AreEqual(zone, e.Zone);
             
-            e = Assert.Throws<SkippedTimeException>(() => mapping.First());
+            e = Assert.Throws<SkippedTimeException>(() => mapping.First())!;
             Assert.AreEqual(localTime, e.LocalDateTime);
             Assert.AreEqual(zone, e.Zone);
 
-            e = Assert.Throws<SkippedTimeException>(() => mapping.Last());
+            e = Assert.Throws<SkippedTimeException>(() => mapping.Last())!;
             Assert.AreEqual(localTime, e.LocalDateTime);
             Assert.AreEqual(zone, e.Zone);
         }
@@ -131,7 +131,7 @@ namespace NodaTime.Test
 
             var mapping = zone.MapLocal(localTime);
             Assert.AreEqual(2, mapping.Count);
-            var e = Assert.Throws<AmbiguousTimeException>(() => mapping.Single());
+            var e = Assert.Throws<AmbiguousTimeException>(() => mapping.Single())!;
             Assert.AreEqual(localTime, e.LocalDateTime);
             Assert.AreEqual(zone, e.Zone);
             Assert.AreEqual(earlier, e.EarlierMapping);
@@ -238,13 +238,13 @@ namespace NodaTime.Test
         public void MapLocalDateTime_UnambiguousDateReturnsUnambiguousMapping()
         {
             //2011-11-09 01:30:00 - not ambiguous in America/New York timezone
-            var unambigiousTime = new LocalDateTime(2011, 11, 9, 1, 30); 
-            var mapping = NewYork.MapLocal(unambigiousTime);
+            var unambiguousTime = new LocalDateTime(2011, 11, 9, 1, 30);
+            var mapping = NewYork.MapLocal(unambiguousTime);
             Assert.AreEqual(1, mapping.Count);
         }
 
         [Test]
-        public void MapLocalDateTime_AmbiguousDateReturnsAmbigousMapping()
+        public void MapLocalDateTime_AmbiguousDateReturnsAmbiguousMapping()
         {
             //2011-11-06 01:30:00 - falls during DST - EST conversion in America/New York timezone
             var ambiguousTime = new LocalDateTime(2011, 11, 6, 1, 30);
@@ -273,7 +273,7 @@ namespace NodaTime.Test
         {
             LocalDate badDate = LocalDatePattern.Iso.Parse(localDate).Value;
             DateTimeZone zone = DateTimeZoneProviders.Tzdb[zoneId];
-            var exception = Assert.Throws<SkippedTimeException>(() => zone.AtStartOfDay(badDate));
+            var exception = Assert.Throws<SkippedTimeException>(() => zone.AtStartOfDay(badDate))!;
             Assert.AreEqual(badDate + LocalTime.Midnight, exception.LocalDateTime);
         }
 

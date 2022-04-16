@@ -23,7 +23,7 @@ namespace NodaTime.Text.Patterns
         private readonly List<ParseAction> parseActions;
         private readonly Func<TBucket> bucketProvider;
         private PatternFields usedFields;
-        private bool formatOnly = false;
+        private bool formatOnly;
 
         internal NodaFormatInfo FormatInfo { get; }
 
@@ -69,7 +69,7 @@ namespace NodaTime.Text.Patterns
             // Now iterate over the pattern.
             while (patternCursor.MoveNext())
             {
-                if (characterHandlers.TryGetValue(patternCursor.Current, out CharacterHandler<TResult, TBucket> handler))
+                if (characterHandlers.TryGetValue(patternCursor.Current, out CharacterHandler<TResult, TBucket>? handler))
                 {
                     handler(patternCursor, this);
                 }
@@ -247,6 +247,7 @@ namespace NodaTime.Text.Patterns
         }
 
 #pragma warning disable IDE0060
+#pragma warning disable CA1801 // Remove/use unused parameter
         // Note: the builder parameter is unused, but required so that the method fits the delegate signature.
 
         /// <summary>
@@ -254,6 +255,7 @@ namespace NodaTime.Text.Patterns
         /// "use a custom format string consisting of H instead of a standard pattern H".
         /// </summary>
         internal static void HandlePercent(PatternCursor pattern, SteppedPatternBuilder<TResult, TBucket> builder)
+#pragma warning restore CA1801
 #pragma warning restore IDE0060
         {
             if (pattern.HasMoreCharacters)
@@ -271,7 +273,7 @@ namespace NodaTime.Text.Patterns
         /// <summary>
         /// Returns a handler for a zero-padded purely-numeric field specifier, such as "seconds", "minutes", "24-hour", "12-hour" etc.
         /// </summary>
-        /// <param name="maxCount">Maximum permissable count (usually two)</param>
+        /// <param name="maxCount">Maximum permissible count (usually two)</param>
         /// <param name="field">Field to remember that we've seen</param>
         /// <param name="minValue">Minimum valid value for the field (inclusive)</param>
         /// <param name="maxValue">Maximum value value for the field (inclusive)</param>
@@ -416,13 +418,13 @@ namespace NodaTime.Text.Patterns
             {
                 if (!nonNegativePredicate(value))
                 {
-                    builder.Append("-");
+                    builder.Append('-');
                 }
             });
         }
 
         /// <summary>
-        /// Adds an action to pad a selected value to a given minimum lenth.
+        /// Adds an action to pad a selected value to a given minimum length.
         /// </summary>
         /// <param name="count">The minimum length to pad to</param>
         /// <param name="selector">The selector function to apply to obtain a value to format</param>

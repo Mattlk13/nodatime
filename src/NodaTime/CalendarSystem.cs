@@ -9,7 +9,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
+using static System.FormattableString;
+
+// Remove static constructors.
+// The calendar system initialization here can be slow or increase memory usage,
+// so the static constructors are very deliberately present to make them truly lazy.
+#pragma warning disable CA1810
 
 namespace NodaTime
 {
@@ -63,7 +68,7 @@ namespace NodaTime
         // Not part of IslamicCalendars as we want to be able to call it without triggering type initialization.
         internal static string GetIslamicId(IslamicLeapYearPattern leapYearPattern, IslamicEpoch epoch)
         {
-            return string.Format(CultureInfo.InvariantCulture, "{0} {1}-{2}", IslamicIdBase, epoch, leapYearPattern);
+            return Invariant($"{IslamicIdBase} {epoch}-{leapYearPattern}");
         }
 
         private const string PersianName = "Persian";
@@ -81,21 +86,19 @@ namespace NodaTime
         private const string UmAlQuraId = UmAlQuraName;
 
         // While we could implement some of these as auto-props, it probably adds more confusion than convenience.
-        private static readonly CalendarSystem IsoCalendarSystem;
         private static readonly CalendarSystem[] CalendarByOrdinal = new CalendarSystem[(int) CalendarOrdinal.Size];
 
         static CalendarSystem()
         {
             var gregorianCalculator = new GregorianYearMonthDayCalculator();
             var gregorianEraCalculator = new GJEraCalculator(gregorianCalculator);
-            IsoCalendarSystem = new CalendarSystem(CalendarOrdinal.Iso, IsoId, IsoName, gregorianCalculator, gregorianEraCalculator);
+            Iso = new CalendarSystem(CalendarOrdinal.Iso, IsoId, IsoName, gregorianCalculator, gregorianEraCalculator);
         }
 
         #region Public factory members for calendars
         /// <summary>
         /// Fetches a calendar system by its unique identifier. This provides full round-tripping of a calendar
-        /// system. It is not guaranteed that calling this method twice with the same identifier will return
-        /// identical references, but the references objects will be equal.
+        /// system. This method will always return the same reference for the same ID.
         /// </summary>
         /// <param name="id">The ID of the calendar system. This is case-sensitive.</param>
         /// <returns>The calendar system with the given ID.</returns>
@@ -105,7 +108,7 @@ namespace NodaTime
         public static CalendarSystem ForId(string id)
         {
             Preconditions.CheckNotNull(id, nameof(id));
-            if (!IdToFactoryMap.TryGetValue(id, out Func<CalendarSystem> factory))
+            if (!IdToFactoryMap.TryGetValue(id, out Func<CalendarSystem>? factory))
             {
                 throw new KeyNotFoundException($"No calendar system for ID {id} exists");
             }
@@ -122,7 +125,7 @@ namespace NodaTime
             // Avoid an array lookup for the overwhelmingly common case.
             if (ordinal == CalendarOrdinal.Iso)
             {
-                return IsoCalendarSystem;
+                return Iso;
             }
             CalendarSystem calendar = CalendarByOrdinal[(int) ordinal];
             if (calendar != null)
@@ -144,9 +147,12 @@ namespace NodaTime
         /// <value>The IDs of all calendar systems available within Noda Time.</value>
         public static IEnumerable<string> Ids => IdToFactoryMap.Keys;
 
+        // Note: each factory method must return the same reference on every invocation.
+        // If the delegate calls a method, that method must have the same guarantee.
         private static readonly Dictionary<string, Func<CalendarSystem>> IdToFactoryMap = new Dictionary<string, Func<CalendarSystem>>
         {
-            {IsoId, () => Iso},
+            // The compiler doesn't know that nothing will execute the delegate before we assign a value to Iso.
+            {IsoId, () => Iso!},
             {PersianSimpleId, () => PersianSimple},
             {PersianArithmeticId, () => PersianArithmetic},
             {PersianAstronomicalId, () => PersianAstronomical},
@@ -179,18 +185,18 @@ namespace NodaTime
         /// and consistency.
         /// </remarks>
         /// <value>The ISO calendar system.</value>
-        public static CalendarSystem Iso => IsoCalendarSystem;
+        public static CalendarSystem Iso { get; }
 
         /// <summary>
-        /// Returns a Hebrew calendar, as described at http://en.wikipedia.org/wiki/Hebrew_calendar. This is a
+        /// Returns a Hebrew calendar, as described at https://en.wikipedia.org/wiki/Hebrew_calendar. This is a
         /// purely mathematical calculator, applied proleptically to the period where the real calendar was observational. 
         /// </summary>
         /// <remarks>
-        /// <para>Please note that in version 1.3.0 of Noda Time, support for the Hebrew calendar is somewhat experimental,
+        /// <para>Please note that support for the Hebrew calendar is somewhat experimental,
         /// particularly in terms of calculations involving adding or subtracting years. Additionally, text formatting
         /// and parsing using month names is not currently supported, due to the challenges of handling leap months.
         /// It is hoped that this will be improved in future versions.</para>
-        /// <para>The implementation for this was taken from http://www.cs.tau.ac.il/~nachum/calendar-book/papers/calendar.ps,
+        /// <para>The implementation for this was taken from https://www.cs.tau.ac.il/~nachum/calendar-book/papers/calendar.ps,
         /// which is a public domain algorithm presumably equivalent to that given in the Calendrical Calculations book
         /// by the same authors (Nachum Dershowitz and Edward Reingold).
         /// </para>
@@ -228,7 +234,7 @@ namespace NodaTime
         /// </summary>
         /// <remarks>
         /// <para>
-        /// This returns a tablular calendar, rather than one based on lunar observation. This calendar is a
+        /// This returns a tabular calendar, rather than one based on lunar observation. This calendar is a
         /// lunar calendar with 12 months, each of 29 or 30 days, resulting in a year of 354 days (or 355 on a leap
         /// year).
         /// </para>
@@ -331,7 +337,7 @@ namespace NodaTime
         ///   <item><term>ISO</term><description><see cref="CalendarSystem.Iso"/></description></item>
         ///   <item><term>Gregorian</term><description><see cref="CalendarSystem.Gregorian"/></description></item>
         ///   <item><term>Coptic</term><description><see cref="CalendarSystem.Coptic"/></description></item>
-        ///   <item><term>Badíʿ</term><description><see cref="CalendarSystem.Badi"/></description></item>
+        ///   <item><term>Badi</term><description><see cref="CalendarSystem.Badi"/></description></item>
         ///   <item><term>Julian</term><description><see cref="CalendarSystem.Julian"/></description></item>
         ///   <item><term>Hijri Civil-Indian</term><description><see cref="CalendarSystem.GetIslamicCalendar"/>(IslamicLeapYearPattern.Indian, IslamicEpoch.Civil)</description></item>
         ///   <item><term>Hijri Civil-Base15</term><description><see cref="CalendarSystem.GetIslamicCalendar"/>(IslamicLeapYearPattern.Base15, IslamicEpoch.Civil)</description></item>
@@ -343,11 +349,16 @@ namespace NodaTime
         ///   <item><term>Hijri Astronomical-HabashAlHasib</term><description><see cref="CalendarSystem.GetIslamicCalendar"/>(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Astronomical)</description></item>
         ///   <item><term>Persian Simple</term><description><see cref="CalendarSystem.PersianSimple"/></description></item>
         ///   <item><term>Persian Arithmetic</term><description><see cref="CalendarSystem.PersianArithmetic"/></description></item>
-        ///   <item><term>Persian Astronomical</term><description><see cref="CalendarSystem.PersianAstronomical"/></description></item>
+        ///   <item><term>Persian Algorithmic</term><description><see cref="CalendarSystem.PersianAstronomical"/> (see note)</description></item>
         ///   <item><term>Um Al Qura</term><description><see cref="CalendarSystem.UmAlQura"/>()</description></item>
         ///   <item><term>Hebrew Civil</term><description><see cref="CalendarSystem.HebrewCivil"/></description></item>
         ///   <item><term>Hebrew Scriptural</term><description><see cref="CalendarSystem.HebrewScriptural"/></description></item>
         /// </list>
+        /// <para>
+        /// The ID "Persian Algorithmic" for the Persian Astronomical calendar is an unfortunate error. The ID has been incorrect
+        /// in Noda Time for so long that "fixing" it now would cause compatibility issues between systems storing or
+        /// exchanging Noda Time data.
+        /// </para>
         /// </remarks>
         /// <value>The unique identifier for this calendar system.</value>
         public string Id { get; }
@@ -432,7 +443,7 @@ namespace NodaTime
         /// the returned value represents the latest year of the era rather than the earliest
         /// year. (See the BC era in the Gregorian calendar, for example.)</remarks>
         /// <param name="era">The era in which to find the greatest year</param>
-        /// <returns>The minimum valid year in the given eraera.</returns>
+        /// <returns>The minimum valid year in the given era.</returns>
         /// <exception cref="ArgumentException"><paramref name="era"/> is not an era used in this calendar.</exception>
         public int GetMinYearOfEra(Era era) => eraCalculator.GetMinYearOfEra(era);
 
@@ -572,6 +583,7 @@ namespace NodaTime
             return eraCalculator.GetEra(absoluteYear);
         }
 
+#pragma warning disable CA1822 // Make a member static because it doesn't use instance members - which is only true in a release build...
         /// <summary>
         /// In debug configurations only, this method calls <see cref="ValidateYearMonthDay"/>
         /// with the components of the given YearMonthDay, ensuring that it's valid in the
@@ -587,6 +599,7 @@ namespace NodaTime
             ValidateYearMonthDay(yearMonthDay.Year, yearMonthDay.Month, yearMonthDay.Day);
 #endif
         }
+#pragma warning restore CA1822
 
         #endregion
 
@@ -766,11 +779,13 @@ namespace NodaTime
         /// </summary>
         private static class IslamicCalendars
         {
+#pragma warning disable CA1814 // Prefer jagged arrays; in this case it would take *more* space.
             internal static readonly CalendarSystem[,] ByLeapYearPatterAndEpoch;
 
             static IslamicCalendars()
             {
                 ByLeapYearPatterAndEpoch = new CalendarSystem[4, 2];
+#pragma warning restore CA1814
                 for (int i = 1; i <= 4; i++)
                 {
                     for (int j = 1; j <= 2; j++)
@@ -814,7 +829,7 @@ namespace NodaTime
             {
                 var julianCalculator = new JulianYearMonthDayCalculator();
                 Julian = new CalendarSystem(CalendarOrdinal.Julian, JulianId, JulianName, julianCalculator, new GJEraCalculator(julianCalculator));
-                Gregorian = new CalendarSystem(CalendarOrdinal.Gregorian, GregorianId, GregorianName, IsoCalendarSystem.YearMonthDayCalculator, IsoCalendarSystem.eraCalculator);
+                Gregorian = new CalendarSystem(CalendarOrdinal.Gregorian, GregorianId, GregorianName, Iso.YearMonthDayCalculator, Iso.eraCalculator);
             }
         }
 

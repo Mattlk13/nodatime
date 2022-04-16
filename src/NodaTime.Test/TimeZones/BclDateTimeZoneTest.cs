@@ -2,15 +2,16 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using NodaTime.TimeZones;
+using NUnit.Framework;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using NUnit.Framework;
-using NodaTime.TimeZones;
 
 namespace NodaTime.Test.TimeZones
 {
-    public class BclDateTimeZoneTest
+    public partial class BclDateTimeZoneTest
     {        
         private static readonly ReadOnlyCollection<NamedWrapper<TimeZoneInfo>> BclZones =
             (TestHelper.IsRunningOnMono ? GetSafeSystemTimeZones() : TimeZoneInfo.GetSystemTimeZones())
@@ -40,6 +41,17 @@ namespace NodaTime.Test.TimeZones
             TimeZoneInfo.CreateCustomTimeZone(zone.Id, zone.BaseUtcOffset, zone.DisplayName, zone.StandardName,
                 zone.DisplayName, zone.GetAdjustmentRules());
 
+        private static int EndTestYearExclusive =>
+#if NET6_0_OR_GREATER
+            2050;
+#else
+            // .NET Core 3.1 on Unix doesn't expose the information we need to determine any DST recurrence
+            // after the final tzif rule. For the moment, limit how far we check.
+            // See https://github.com/dotnet/corefx/issues/17117
+            TestHelper.IsRunningOnDotNetCoreUnix? 2037 : 2050;
+#endif
+
+
         // TODO: Check what this does on Mono, both on Windows and Unix.
 
         [Test]
@@ -61,16 +73,18 @@ namespace NodaTime.Test.TimeZones
         [Category("BrokenOnMonoLinux")]
         public void AllZoneTransitions(NamedWrapper<TimeZoneInfo> windowsZoneWrapper)
         {
+            // The Central Brazilian Standard Time zone is broken in .NET 6.
+            // See https://github.com/dotnet/runtime/issues/61842
+            if (windowsZoneWrapper.Value.Id == "Central Brazilian Standard Time")
+            {
+                return;
+            }
+
             var windowsZone = windowsZoneWrapper.Value;
             var nodaZone = BclDateTimeZone.FromTimeZoneInfo(windowsZone);
 
-            // Currently .NET Core doesn't expose the information we need to determine any DST recurrence
-            // after the final tzif rule. For the moment, limit how far we check.
-            // See https://github.com/dotnet/corefx/issues/17117
-            int endYear = TestHelper.IsRunningOnDotNetCoreUnix ? 2037 : 2050;
-
             Instant instant = Instant.FromUtc(1800, 1, 1, 0, 0);
-            Instant end = Instant.FromUtc(endYear, 1, 1, 0, 0);
+            Instant end = Instant.FromUtc(EndTestYearExclusive, 1, 1, 0, 0);
 
             while (instant < end)
             {
@@ -102,23 +116,14 @@ namespace NodaTime.Test.TimeZones
         [Category("BrokenOnMonoLinux")]
         public void AllZonesEveryWeek(NamedWrapper<TimeZoneInfo> windowsZoneWrapper)
         {
-            ValidateZoneEveryWeek(windowsZoneWrapper.Value);
-        }
+            // The Central Brazilian Standard Time zone is broken in .NET 6.
+            // See https://github.com/dotnet/runtime/issues/61842
+            if (windowsZoneWrapper.Value.Id == "Central Brazilian Standard Time")
+            {
+                return;
+            }
 
-        // This demonstrates bug 115.
-        [Test]
-        public void Namibia()
-        {
-            String bclId = "Namibia Standard Time";
-            try
-            {
-                ValidateZoneEveryWeek(TimeZoneInfo.FindSystemTimeZoneById(bclId));
-            }
-            catch (TimeZoneNotFoundException)
-            {
-                // This may occur on Mono, for example.
-                Assert.Ignore("Test assumes existence of BCL zone with ID: " + bclId);
-            }
+            ValidateZoneEveryWeek(windowsZoneWrapper.Value);
         }
 
         [Test]
@@ -135,14 +140,8 @@ namespace NodaTime.Test.TimeZones
         private void ValidateZoneEveryWeek(TimeZoneInfo windowsZone)
         {
             var nodaZone = BclDateTimeZone.FromTimeZoneInfo(windowsZone);
-
-            // Currently .NET Core doesn't expose the information we need to determine any DST recurrence
-            // after the final tzif rule. For the moment, limit how far we check.
-            // See https://github.com/dotnet/corefx/issues/17117
-            int endYear = TestHelper.IsRunningOnDotNetCoreUnix ? 2037 : 2050;
-
             Instant instant = Instant.FromUtc(1950, 1, 1, 0, 0);
-            Instant end = Instant.FromUtc(endYear, 1, 1, 0, 0);
+            Instant end = Instant.FromUtc(EndTestYearExclusive, 1, 1, 0, 0);
 
             while (instant < end)
             {
@@ -198,7 +197,7 @@ namespace NodaTime.Test.TimeZones
         public void AwkwardLeapYears()
         {
             // This mimics the data on Mono on Linux for Europe/Malta, where there's a BCL adjustment rule for
-            // each rule for quite a long time. One of those years is 1948, and the daylight transition is Feburary
+            // each rule for quite a long time. One of those years is 1948, and the daylight transition is February
             // 29th. That then fails when we try to build a ZoneInterval at the end of that year.
             // See https://github.com/nodatime/nodatime/issues/743 for more details. We've simplified this to just
             // a single rule here...
@@ -283,12 +282,57 @@ namespace NodaTime.Test.TimeZones
             Assert.AreEqual(expectedSummer, summerInterval);
         }
 
+        // See https://github.com/nodatime/nodatime/issues/1524 for the background
+        // It would be nice to test earlier dates (e.g. 1967 and 1998) where transitions
+        // actually occurred on the first of the "next month", but the Windows database has very different
+        // data from TZDB in those cases.
+        [Test]
+        public void TransitionAtMidnight()
+        {
+            var bclZone = GetBclZoneOrIgnore("E. South America Standard Time");
+            var nodaTzdbZone = DateTimeZoneProviders.Tzdb["America/Sao_Paulo"];
+            var nodaBclZone = BclDateTimeZone.FromTimeZoneInfo(bclZone);
+
+            // Brazil in 2012:
+            // Fall back from -02:00 to -03:00 at midnight on February 26th
+            var expectedFallBack = Instant.FromUtc(2012, 2, 26, 2, 0, 0);
+            // Spring forward from -03:00 to -02:00 at midnight on October 21st
+            var expectedSpringForward = Instant.FromUtc(2012, 10, 21, 3, 0, 0);
+            // This is an arbitrary instant between the fall back and spring forward.
+            var betweenTransitions = Instant.FromUtc(2012, 6, 1, 0, 0, 0);
+
+            // Check that these transitions are as expected when we use TZDB.
+            var nodaTzdbInterval = nodaTzdbZone.GetZoneInterval(betweenTransitions);
+            Assert.AreEqual(expectedFallBack, nodaTzdbInterval.Start);
+            Assert.AreEqual(expectedSpringForward, nodaTzdbInterval.End);
+
+            // Check that the real BCL time zone behaves as reported in the issue: the transitions occur one millisecond early
+            var expectedFallBackBclTransition = expectedFallBack - Duration.FromMilliseconds(1);
+            Assert.AreEqual(TimeSpan.FromHours(-2), bclZone.GetUtcOffset(expectedFallBackBclTransition.ToDateTimeUtc() - TimeSpan.FromTicks(1)));
+            Assert.AreEqual(TimeSpan.FromHours(-3), bclZone.GetUtcOffset(expectedFallBackBclTransition.ToDateTimeUtc()));
+
+            var expectedSpringForwardBclTransition = expectedSpringForward - Duration.FromMilliseconds(1);
+            Assert.AreEqual(TimeSpan.FromHours(-3), bclZone.GetUtcOffset(expectedSpringForwardBclTransition.ToDateTimeUtc() - TimeSpan.FromTicks(1)));
+            Assert.AreEqual(TimeSpan.FromHours(-2), bclZone.GetUtcOffset(expectedSpringForwardBclTransition.ToDateTimeUtc()));
+
+            // Assert that Noda Time accounts for the Windows time zone data weirdness, and corrects it to
+            // a transition at midnight.
+            var nodaBclInterval = nodaBclZone.GetZoneInterval(betweenTransitions);
+            Assert.AreEqual(nodaTzdbInterval.Start, nodaBclInterval.Start);
+            Assert.AreEqual(nodaTzdbInterval.End, nodaBclInterval.End);
+
+            // Finally check the use case that was actually reported
+            var actualStartOfDayAfterSpringForward = nodaBclZone.AtStartOfDay(new LocalDate(2012, 10, 21));
+            var expectedStartOfDayAfterSpringForward = new LocalDateTime(2012, 10, 21, 1, 0, 0).InZoneStrictly(nodaBclZone);
+            Assert.AreEqual(expectedStartOfDayAfterSpringForward, actualStartOfDayAfterSpringForward);
+        }
+
         private void ValidateZoneEquality(Instant instant, DateTimeZone nodaZone, TimeZoneInfo windowsZone)
         {
-            // The BCL is basically broken (up to and including .NET 4.5.1 at least) around its interpretation
+            // The BCL is basically broken (up to and including .NET 6 at least) around its interpretation
             // of its own data around the new year. See http://codeblog.jonskeet.uk/2014/09/30/the-mysteries-of-bcl-time-zone-data/
             // for details. We're not trying to emulate this behaviour.
-            // It's a lot *better* for .NET 4.6, 
+            // It's improved over time, but it's still broken in some places. It's not worth worrying about.
             var utc = instant.InUtc();
             if ((utc.Month == 12 && utc.Day == 31) || (utc.Month == 1 && utc.Day == 1))
             {
@@ -307,12 +351,37 @@ namespace NodaTime.Test.TimeZones
                     "Non-transition from {0} to {1}", previousInterval, interval);
             }
             var nodaOffset = interval.WallOffset;
-            var windowsOffset = windowsZone.GetUtcOffset(instant.ToDateTimeUtc());
-            Assert.AreEqual(windowsOffset, nodaOffset.ToTimeSpan(), "Incorrect offset at {0} in interval {1}", instant, interval);
-            var bclDaylight = windowsZone.IsDaylightSavingTime(instant.ToDateTimeUtc());
+
+            // Some midnight transitions in the Noda Time representation are actually corrections for the
+            // BCL data indicating 23:59:59.999 on the previous day. If we're testing around midnight,
+            // allow the Windows data to be correct for either of those instants.
+            var acceptableInstants = new List<Instant> { instant };
+            var localTimeOfDay = instant.InZone(nodaZone).TimeOfDay;
+            if ((localTimeOfDay == LocalTime.Midnight || localTimeOfDay == LocalTime.MaxValue) && instant > NodaConstants.BclEpoch)
+            {
+                acceptableInstants.Add(instant - Duration.FromMilliseconds(1));
+            }
+
+            var expectedOffsetAsTimeSpan = nodaOffset.ToTimeSpan();
+
+            // Find an instant that at least has the right offset (so will pass the first assertion).
+            var instantToTest = acceptableInstants.FirstOrDefault(candidate => windowsZone.GetUtcOffset(candidate.ToDateTimeUtc()) == expectedOffsetAsTimeSpan);
+            // If the test is definitely going to fail, just use the original instant that was passed in.
+            if (instantToTest == default)
+            {
+                instantToTest = instant;
+            }
+
+            var windowsOffset = windowsZone.GetUtcOffset(instantToTest.ToDateTimeUtc());
+            Assert.AreEqual(windowsOffset, expectedOffsetAsTimeSpan, "Incorrect offset at {0} in interval {1}", instantToTest, interval);
+            var bclDaylight = windowsZone.IsDaylightSavingTime(instantToTest.ToDateTimeUtc());
             Assert.AreEqual(bclDaylight, interval.Savings != Offset.Zero,
                 "At {0}, BCL IsDaylightSavingTime={1}; Noda savings={2}",
                 instant, bclDaylight, interval.Savings);
         }
+
+        private TimeZoneInfo GetBclZoneOrIgnore(string systemTimeZoneId) =>
+            TimeZoneInfo.GetSystemTimeZones().FirstOrDefault(z => z.Id == systemTimeZoneId)
+            ?? Ignore.Throw<TimeZoneInfo>($"Time zone {systemTimeZoneId} not found");
     }
 }

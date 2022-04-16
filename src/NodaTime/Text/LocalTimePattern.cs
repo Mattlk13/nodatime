@@ -43,6 +43,13 @@ namespace NodaTime.Text
         /// <value>An invariant local time pattern which is ISO-8601 compatible, providing exactly 9 decimal places.</value>
         public static LocalTimePattern LongExtendedIso => Patterns.LongExtendedIsoPatternImpl;
 
+        /// <summary>
+        /// Gets an invariant local time pattern which is ISO-8601 compatible, with precision of just seconds.
+        /// This corresponds to the text pattern "HH':'mm':'ss".
+        /// </summary>
+        /// <value>An invariant local time pattern which is ISO-8601 compatible, with no sub-second precision.</value>
+        public static LocalTimePattern GeneralIso => Patterns.GeneralIsoPatternImpl;
+
         private const string DefaultFormatPattern = "T"; // Long
 
         internal static readonly PatternBclSupport<LocalTime> BclSupport =
@@ -56,6 +63,7 @@ namespace NodaTime.Text
         {
             internal static readonly LocalTimePattern ExtendedIsoPatternImpl = CreateWithInvariantCulture("HH':'mm':'ss;FFFFFFFFF");
             internal static readonly LocalTimePattern LongExtendedIsoPatternImpl = CreateWithInvariantCulture("HH':'mm':'ss;fffffffff");
+            internal static readonly LocalTimePattern GeneralIsoPatternImpl = CreateWithInvariantCulture("HH':'mm':'ss");
         }
 
         /// <summary>
@@ -152,7 +160,7 @@ namespace NodaTime.Text
         /// <param name="templateValue">Template value to use for unspecified fields</param>
         /// <returns>A pattern for parsing and formatting local times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static LocalTimePattern Create(string patternText, CultureInfo cultureInfo, LocalTime templateValue) =>
+        public static LocalTimePattern Create(string patternText, [ValidatedNotNull] CultureInfo cultureInfo, LocalTime templateValue) =>
             Create(patternText, NodaFormatInfo.GetFormatInfo(cultureInfo), templateValue);
 
         /// <summary>
@@ -211,7 +219,7 @@ namespace NodaTime.Text
         /// </summary>
         /// <param name="cultureInfo">The culture to use in the new pattern.</param>
         /// <returns>A new pattern with the given culture.</returns>
-        public LocalTimePattern WithCulture(CultureInfo cultureInfo) =>
+        public LocalTimePattern WithCulture([ValidatedNotNull] CultureInfo cultureInfo) =>
             WithFormatInfo(NodaFormatInfo.GetFormatInfo(cultureInfo));
 
         /// <summary>

@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Text;
 
 namespace NodaTime.TimeZones.IO
 {
@@ -100,7 +101,7 @@ namespace NodaTime.TimeZones.IO
                     DateTimeZoneWriter.DateTimeZoneType.Fixed => FixedDateTimeZone.Read(reader, id),
                     DateTimeZoneWriter.DateTimeZoneType.Precalculated =>
                     CachedDateTimeZone.ForZone(PrecalculatedDateTimeZone.Read(reader, id)),
-                    _ => throw new InvalidNodaDataException("Unknown time zone type " + type)
+                    _ => throw new InvalidNodaDataException($"Unknown time zone type {type}")
                 };
             }
         }
@@ -118,16 +119,22 @@ namespace NodaTime.TimeZones.IO
         internal static TzdbStreamData FromStream(Stream stream)
         {
             Preconditions.CheckNotNull(stream, nameof(stream));
-            int version = new BinaryReader(stream).ReadInt32();
-            if (version != AcceptedVersion)
+
+            // Using statement to satisfy FxCop, but dispose won't do anything anyway, because
+            // we deliberately leave the stream open.
+            using (var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true))
             {
-                throw new InvalidNodaDataException($"Unable to read stream with version {version}");
+                int version = reader.ReadInt32();
+                if (version != AcceptedVersion)
+                {
+                    throw new InvalidNodaDataException($"Unable to read stream with version {version}");
+                }
             }
             Builder builder = new Builder();
             foreach (var field in TzdbStreamField.ReadFields(stream))
             {
                 // Only handle fields we know about
-                if (FieldHandlers.TryGetValue(field.Id, out Action<Builder, TzdbStreamField> handler))
+                if (FieldHandlers.TryGetValue(field.Id, out Action<Builder, TzdbStreamField>? handler))
                 {
                     handler(builder, field);
                 }
@@ -146,8 +153,8 @@ namespace NodaTime.TimeZones.IO
             // Note: deliberately mutable, as this is useful later when we map the canonical IDs to themselves.
             // This is a mapping of the aliases from TZDB, at this point.
             internal IDictionary<string, string>? tzdbIdMap;
-            internal ReadOnlyCollection<TzdbZoneLocation>? zoneLocations = null;
-            internal ReadOnlyCollection<TzdbZone1970Location>? zone1970Locations = null;
+            internal ReadOnlyCollection<TzdbZoneLocation>? zoneLocations;
+            internal ReadOnlyCollection<TzdbZone1970Location>? zone1970Locations;
             internal WindowsZones? windowsMapping;
             internal readonly IDictionary<string, TzdbStreamField> zoneFields = new Dictionary<string, TzdbStreamField>();
 
@@ -178,7 +185,7 @@ namespace NodaTime.TimeZones.IO
                     string id = reader.ReadString();
                     if (zoneFields.ContainsKey(id))
                     {
-                        throw new InvalidNodaDataException("Multiple definitions for zone " + id);
+                        throw new InvalidNodaDataException($"Multiple definitions for zone {id}");
                     }
                     zoneFields[id] = field;
                 }
@@ -236,11 +243,11 @@ namespace NodaTime.TimeZones.IO
                 }
             }
 
-            private void CheckSingleField(TzdbStreamField field, object? expectedNullField)
+            private static void CheckSingleField(TzdbStreamField field, object? expectedNullField)
             {
                 if (expectedNullField != null)
                 {
-                    throw new InvalidNodaDataException("Multiple fields of ID " + field.Id);
+                    throw new InvalidNodaDataException($"Multiple fields of ID {field.Id}");
                 }
             }
 
@@ -248,7 +255,7 @@ namespace NodaTime.TimeZones.IO
             {
                 if (stringPool is null)
                 {
-                    throw new InvalidNodaDataException("String pool must be present before field " + field.Id);
+                    throw new InvalidNodaDataException($"String pool must be present before field {field.Id}");
                 }
             }
         }

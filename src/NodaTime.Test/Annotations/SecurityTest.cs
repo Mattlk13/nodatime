@@ -17,7 +17,7 @@ namespace NodaTime.Test.Annotations
         {
             var violations = new List<string>();
 
-            foreach (var type in typeof(Instant).GetTypeInfo().Assembly.DefinedTypes.Where(type => !type.IsInterface))
+            foreach (var type in typeof(Instant).Assembly.DefinedTypes.Where(type => !type.IsInterface))
             {
                 foreach (var iface in type.ImplementedInterfaces)
                 {
@@ -29,7 +29,7 @@ namespace NodaTime.Test.Annotations
                             map.InterfaceMethods[i].IsDefined(typeof(SecurityCriticalAttribute), false) &&
                             !map.TargetMethods[i].IsDefined(typeof(SecurityCriticalAttribute), false))
                         {
-                            violations.Add(type.FullName + "/" + map.TargetMethods[i].Name);
+                            violations.Add($"{type.FullName}/{map.TargetMethods[i].Name}");
                         }
                     }
                 }

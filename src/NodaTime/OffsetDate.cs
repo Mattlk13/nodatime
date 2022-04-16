@@ -29,6 +29,7 @@ namespace NodaTime
     /// </remarks>
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
     [TypeConverter(typeof(OffsetDateTypeConverter))]
+    [XmlSchemaProvider(nameof(AddSchema))]
     public readonly struct OffsetDate : IEquatable<OffsetDate>, IXmlSerializable, IFormattable
     {
         private readonly LocalDate date;
@@ -189,12 +190,12 @@ namespace NodaTime
         /// Formats the value of the current instance using the specified pattern.
         /// </summary>
         /// <returns>
-        /// A <see cref="T:System.String" /> containing the value of the current instance in the specified format.
+        /// A <see cref="System.String" /> containing the value of the current instance in the specified format.
         /// </returns>
-        /// <param name="patternText">The <see cref="T:System.String" /> specifying the pattern to use,
+        /// <param name="patternText">The <see cref="System.String" /> specifying the pattern to use,
         /// or null to use the default format pattern ("G").
         /// </param>
-        /// <param name="formatProvider">The <see cref="T:System.IFormatProvider" /> to use when formatting the value,
+        /// <param name="formatProvider">The <see cref="System.IFormatProvider" /> to use when formatting the value,
         /// or null to use the current thread's culture to obtain a format provider.
         /// </param>
         /// <filterpriority>2</filterpriority>
@@ -214,6 +215,13 @@ namespace NodaTime
         }
 
         #region XML serialization
+        /// <summary>
+        /// Adds the XML schema type describing the structure of the <see cref="OffsetDate"/> XML serialization to the given <paramref name="xmlSchemaSet"/>.
+        /// </summary>
+        /// <param name="xmlSchemaSet">The XML schema set provided by <see cref="XmlSchemaExporter"/>.</param>
+        /// <returns>The qualified name of the schema type that was added to the <paramref name="xmlSchemaSet"/>.</returns>
+        public static XmlQualifiedName AddSchema(XmlSchemaSet xmlSchemaSet) => Xml.XmlSchemaDefinition.AddOffsetDateSchemaType(xmlSchemaSet);
+
         /// <inheritdoc />
         XmlSchema IXmlSerializable.GetSchema() => null!; // TODO(nullable): Return XmlSchema? when docfx works with that
 

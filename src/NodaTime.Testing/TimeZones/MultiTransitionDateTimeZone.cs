@@ -42,8 +42,8 @@ namespace NodaTime.Testing.TimeZones
         /// <remarks>
         /// This will always return a valid zone interval, as time zones cover the whole of time.
         /// </remarks>
-        /// <param name="instant">The <see cref="T:NodaTime.Instant" /> to query.</param>
-        /// <returns>The defined <see cref="T:NodaTime.TimeZones.ZoneInterval" />.</returns>
+        /// <param name="instant">The <see cref="NodaTime.Instant" /> to query.</param>
+        /// <returns>The defined <see cref="NodaTime.TimeZones.ZoneInterval" />.</returns>
         public override ZoneInterval GetZoneInterval(Instant instant)
         {
             int lower = 0; // Inclusive
@@ -70,17 +70,22 @@ namespace NodaTime.Testing.TimeZones
             throw new InvalidOperationException($"Instant {instant} did not exist in time zone {Id}");
         }
 
+// This isn't really a collection type; it only implements IEnumerable to enable collection initializers.
+#pragma warning disable CA1010 // Implement IEnumerable<T>
+#pragma warning disable CA1710 // Rename class to end in "Collection"
         /// <summary>
         /// Builder to create instances of <see cref="MultiTransitionDateTimeZone"/>. Each builder
         /// can only be built once.
         /// </summary>
         public sealed class Builder : IEnumerable
+#pragma warning restore CA1710
+#pragma warning restore CA1010
         {
             private readonly List<ZoneInterval> intervals = new List<ZoneInterval>();
             private Offset currentStandardOffset;
             private Offset currentSavings;
             private string currentName;
-            private bool built = false;
+            private bool built;
 
             /// <summary>
             /// Gets the ID of the time zone which will be built.
@@ -149,7 +154,7 @@ namespace NodaTime.Testing.TimeZones
             /// <param name="newStandardOffsetHours">The new standard offset, in hours.</param>
             /// <param name="newSavingOffsetHours">The new daylight saving offset, in hours.</param>
             public void Add(Instant transition, int newStandardOffsetHours, int newSavingOffsetHours) =>
-                Add(transition, newStandardOffsetHours, newSavingOffsetHours, "Interval from " + transition);
+                Add(transition, newStandardOffsetHours, newSavingOffsetHours, $"Interval from {transition}");
 
             /// <summary>
             /// Adds a transition at the given instant, to the specified new standard offset,

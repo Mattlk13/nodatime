@@ -40,8 +40,21 @@ namespace NodaTime
     /// </remarks>
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
     [TypeConverter(typeof(LocalDateTimeTypeConverter))]
+    [XmlSchemaProvider(nameof(AddSchema))]
     public readonly struct LocalDateTime : IEquatable<LocalDateTime>, IComparable<LocalDateTime>, IComparable, IFormattable, IXmlSerializable
     {
+        /// <summary>
+        /// The maximum (latest) date and time representable in the ISO calendar system.
+        /// This is a nanosecond before midnight at the end of <see cref="LocalDate.MaxIsoValue"/>.
+        /// </summary>
+        public static LocalDateTime MaxIsoValue => LocalDate.MaxIsoValue + LocalTime.MaxValue;
+
+        /// <summary>
+        /// The minimum (earliest) date and time representable in the ISO calendar system.
+        /// This is midnight at the start of <see cref="LocalDate.MinIsoValue"/>.
+        /// </summary>
+        public static LocalDateTime MinIsoValue => LocalDate.MinIsoValue + LocalTime.MinValue;
+
         private readonly LocalDate date;
         private readonly LocalTime time;
 
@@ -297,6 +310,12 @@ namespace NodaTime
         /// If the date and time is not on a tick boundary (the unit of granularity of DateTime) the value will be truncated
         /// towards the start of time.
         /// </para>
+        /// <para>
+        /// <see cref="DateTime"/> uses the Gregorian calendar by definition, so the value is implicitly converted
+        /// to the Gregorian calendar first. The result will be on the same physical day,
+        /// but the values returned by the Year/Month/Day properties of the <see cref="DateTime"/> may not
+        /// match the Year/Month/Day properties of this value.
+        /// </para>
         /// </remarks>
         /// <exception cref="InvalidOperationException">The date/time is outside the range of <c>DateTime</c>.</exception>
         /// <returns>A <see cref="DateTime"/> value for the same date and time as this value.</returns>
@@ -337,6 +356,7 @@ namespace NodaTime
         /// <returns>A new <see cref="LocalDateTime"/> with the same values as the specified <c>DateTime</c>.</returns>
         public static LocalDateTime FromDateTime(DateTime dateTime, CalendarSystem calendar)
         {
+            Preconditions.CheckNotNull(calendar, nameof(calendar));
             int days = TickArithmetic.NonNegativeTicksToDaysAndTickOfDay(dateTime.Ticks, out long tickOfDay) - NodaConstants.BclDaysAtUnixEpoch;
             return new LocalDateTime(new LocalDate(days, calendar), new LocalTime(unchecked(tickOfDay * NodaConstants.NanosecondsPerTick)));
         }
@@ -461,12 +481,12 @@ namespace NodaTime
         /// This uses explicit interface implementation to avoid it being called accidentally. The generic implementation should usually be preferred.
         /// </remarks>
         /// <exception cref="ArgumentException"><paramref name="obj"/> is non-null but does not refer to an instance of <see cref="LocalDateTime"/>,
-        /// or refers to a adate/time in a different calendar system.</exception>
+        /// or refers to a date/time in a different calendar system.</exception>
         /// <param name="obj">The object to compare this value with.</param>
         /// <returns>The result of comparing this LocalDateTime with another one; see <see cref="CompareTo(NodaTime.LocalDateTime)"/> for general details.
         /// If <paramref name="obj"/> is null, this method returns a value greater than 0.
         /// </returns>
-        int IComparable.CompareTo(object obj)
+        int IComparable.CompareTo(object? obj)
         {
             if (obj is null)
             {
@@ -622,7 +642,7 @@ namespace NodaTime
         public override int GetHashCode() => HashCodeHelper.Hash(date, time, Calendar);
         #endregion
         /// <summary>
-        /// Returns this date/time, with the given date adjuster applied to it, maintaing the existing time of day.
+        /// Returns this date/time, with the given date adjuster applied to it, maintaining the existing time of day.
         /// </summary>
         /// <remarks>
         /// If the adjuster attempts to construct an
@@ -932,12 +952,12 @@ namespace NodaTime
         /// Formats the value of the current instance using the specified pattern.
         /// </summary>
         /// <returns>
-        /// A <see cref="T:System.String" /> containing the value of the current instance in the specified format.
+        /// A <see cref="System.String" /> containing the value of the current instance in the specified format.
         /// </returns>
-        /// <param name="patternText">The <see cref="T:System.String" /> specifying the pattern to use,
+        /// <param name="patternText">The <see cref="System.String" /> specifying the pattern to use,
         /// or null to use the default format pattern ("G").
         /// </param>
-        /// <param name="formatProvider">The <see cref="T:System.IFormatProvider" /> to use when formatting the value,
+        /// <param name="formatProvider">The <see cref="System.IFormatProvider" /> to use when formatting the value,
         /// or null to use the current thread's culture to obtain a format provider.
         /// </param>
         /// <filterpriority>2</filterpriority>
@@ -946,6 +966,14 @@ namespace NodaTime
         #endregion Formatting
 
         #region XML serialization
+        /// <summary>
+        /// Adds the XML schema type describing the structure of the <see cref="LocalDateTime"/> XML serialization to the given <paramref name="xmlSchemaSet"/>.
+        /// the <paramref name="xmlSchemaSet"/>.
+        /// </summary>
+        /// <param name="xmlSchemaSet">The XML schema set provided by <see cref="XmlSchemaExporter"/>.</param>
+        /// <returns>The qualified name of the schema type that was added to the <paramref name="xmlSchemaSet"/>.</returns>
+        public static XmlQualifiedName AddSchema(XmlSchemaSet xmlSchemaSet) => Xml.XmlSchemaDefinition.AddLocalDateTimeSchemaType(xmlSchemaSet);
+
         /// <inheritdoc />
         XmlSchema IXmlSerializable.GetSchema() => null!; // TODO(nullable): Return XmlSchema? when docfx works with that
 

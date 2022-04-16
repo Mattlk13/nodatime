@@ -63,12 +63,12 @@ namespace NodaTime
     /// To obtain a <see cref="DateTimeZone"/> representing the system default time zone, you can either call
     /// <see cref="IDateTimeZoneProvider.GetSystemDefault"/> on a provider to obtain the <see cref="DateTimeZone"/> that
     /// the provider considers matches the system default time zone, or you can construct a
-    /// <c>BclDateTimeZone</c> via <c>BclDateTimeZone.ForSystemDefault</c>, which returns a
+    /// <see cref="BclDateTimeZone"/> via <see cref="BclDateTimeZone.ForSystemDefault"/>, which returns a
     /// <see cref="DateTimeZone"/> that wraps the system local <see cref="TimeZoneInfo"/>. The latter will always
     /// succeed, but has access only to that information available via the .NET time zone; the former may contain more
     /// complete data, but may (in uncommon cases) fail to find a matching <see cref="DateTimeZone"/>.
-    /// Note that <c>BclDateTimeZone</c> is not available on the .NET Standard 1.3 build of Noda Time, so this fallback strategy can
-    /// only be used with the desktop version.
+    /// Note that <c>BclDateTimeZone</c> may not be available in all versions of Noda Time 1.x and 2.x; see the class
+    /// documentation for more details.
     /// </para>
     /// <para>
     /// Note that Noda Time does not require that <see cref="DateTimeZone"/> instances be singletons.
@@ -86,7 +86,7 @@ namespace NodaTime
     /// avoid this if possible.
     /// </threadsafety>
     [Immutable]
-    public abstract class DateTimeZone : IZoneIntervalMapWithMinMax
+    public abstract class DateTimeZone : IZoneIntervalMap
     {
         /// <summary>
         /// The ID of the UTC (Coordinated Universal Time) time zone. This ID is always valid, whatever provider is
@@ -103,7 +103,7 @@ namespace NodaTime
         /// compare equal to an instance returned by calling <see cref="ForOffset"/> with an offset of zero, but it may
         /// or may not compare equal to an instance returned by e.g. <c>DateTimeZoneProviders.Tzdb["UTC"]</c>.
         /// </remarks>
-        /// <value>A UTC <see cref="T:NodaTime.DateTimeZone" />.</value>
+        /// <value>A UTC <see cref="NodaTime.DateTimeZone" />.</value>
         public static DateTimeZone Utc { get; } = new FixedDateTimeZone(Offset.Zero);
         private const int FixedZoneCacheGranularitySeconds = NodaConstants.SecondsPerMinute * 30;
         private const int FixedZoneCacheMinimumSeconds = -FixedZoneCacheGranularitySeconds * 12 * 2; // From UTC-12
@@ -142,7 +142,7 @@ namespace NodaTime
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="T:NodaTime.DateTimeZone" /> class.
+        /// Initializes a new instance of the <see cref="NodaTime.DateTimeZone" /> class.
         /// </summary>
         /// <param name="id">The unique id of this time zone.</param>
         /// <param name="isFixed">Set to <c>true</c> if this time zone has no transitions.</param>
@@ -207,6 +207,13 @@ namespace NodaTime
         /// </returns>
         public virtual Offset GetUtcOffset(Instant instant) => GetZoneInterval(instant).WallOffset;
 
+        // Note for CA2119:
+        // IZoneIntervalMap is primarily used while *building* time zones, but is also implemented by DateTimeZone for simplicity
+        // of caching. (BclDateTimeZone always returns a cached date time zone having created an IZoneIntervalMap.)
+        // While a regular user can create their own DateTimeZone implementation, that would never end up being cached
+        // because CachedDateTimeZone.ForZone is internal anyway.
+        // In other words: we don't believe this can be exploited.
+
         /// <summary>
         /// Gets the zone interval for the given instant; the range of time around the instant in which the same Offset
         /// applies (with the same split between standard time and daylight saving time, and with the same offset).
@@ -214,10 +221,12 @@ namespace NodaTime
         /// <remarks>
         /// This will always return a valid zone interval, as time zones cover the whole of time.
         /// </remarks>
-        /// <param name="instant">The <see cref="T:NodaTime.Instant" /> to query.</param>
-        /// <returns>The defined <see cref="T:NodaTime.TimeZones.ZoneInterval" />.</returns>
+        /// <param name="instant">The <see cref="NodaTime.Instant" /> to query.</param>
+        /// <returns>The defined <see cref="NodaTime.TimeZones.ZoneInterval" />.</returns>
         /// <seealso cref="GetZoneIntervals(Interval)"/>
+#pragma warning disable CA2119 // Seal methods that satisfy private interfaces - see note above
         public abstract ZoneInterval GetZoneInterval(Instant instant);
+#pragma warning restore CA2119
 
         /// <summary>
         /// Returns complete information about how the given <see cref="LocalDateTime" /> is mapped in this time zone.

@@ -9,6 +9,7 @@ using NodaTime.Calendars;
 using NodaTime.Testing.TimeZones;
 using NodaTime.Text;
 using NodaTime.TimeZones;
+using NodaTime.Xml;
 using NUnit.Framework;
 
 namespace NodaTime.Test
@@ -187,6 +188,17 @@ namespace NodaTime.Test
         }
 
         [Test]
+        public void ToDateTimeOffset_JulianCalendar()
+        {
+            // Non-Gregorian calendar systems are handled by converting to the same
+            // date, just like the DateTime constructor does.
+            ZonedDateTime zoned = SampleZone.AtStrictly(new LocalDateTime(2011, 3, 5, 1, 0, 0, CalendarSystem.Julian));
+            DateTimeOffset expected = new DateTimeOffset(2011, 3, 5, 1, 0, 0, 0, new JulianCalendar(), TimeSpan.FromHours(3));
+            DateTimeOffset actual = zoned.ToDateTimeOffset();
+            Assert.AreEqual(expected, actual);
+        }
+
+        [Test]
         [TestCase(0, 30, 20)]
         [TestCase(-1, -30, -20)]
         [TestCase(0, 30, 55)]
@@ -289,6 +301,19 @@ namespace NodaTime.Test
         {
             ZonedDateTime zoned = SampleZone.AtStrictly(new LocalDateTime(2011, 3, 5, 1, 0, 0));
             DateTime expected = new DateTime(2011, 3, 5, 1, 0, 0, DateTimeKind.Unspecified);
+            DateTime actual = zoned.ToDateTimeUnspecified();
+            Assert.AreEqual(expected, actual);
+            // Kind isn't checked by Equals...
+            Assert.AreEqual(DateTimeKind.Unspecified, actual.Kind);
+        }
+
+        [Test]
+        public void ToDateTimeUnspecified_JulianCalendar()
+        {
+            // Non-Gregorian calendar systems are handled by converting to the same
+            // date, just like the DateTime constructor does.
+            ZonedDateTime zoned = SampleZone.AtStrictly(new LocalDateTime(2011, 3, 5, 1, 0, 0, CalendarSystem.Julian));
+            DateTime expected = new DateTime(2011, 3, 5, 1, 0, 0, 0, new JulianCalendar(), DateTimeKind.Unspecified);
             DateTime actual = zoned.ToDateTimeUnspecified();
             Assert.AreEqual(expected, actual);
             // Kind isn't checked by Equals...
@@ -402,7 +427,7 @@ namespace NodaTime.Test
         [Test]
         public void XmlSerialization_Iso()
         {
-            DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Tzdb;
+            XmlSerializationSettings.DateTimeZoneProvider = DateTimeZoneProviders.Tzdb;
             var zone = DateTimeZoneProviders.Tzdb["America/New_York"];
             var value = new ZonedDateTime(new LocalDateTime(2013, 4, 12, 17, 53, 23).WithOffset(Offset.FromHours(-4)), zone);
             TestHelper.AssertXmlRoundtrip(value, "<value zone=\"America/New_York\">2013-04-12T17:53:23-04</value>");
@@ -424,7 +449,7 @@ namespace NodaTime.Test
                 return;
             }
 
-            DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Bcl;
+            XmlSerializationSettings.DateTimeZoneProvider = DateTimeZoneProviders.Bcl;
             var value = new ZonedDateTime(new LocalDateTime(2013, 4, 12, 17, 53, 23).WithOffset(Offset.FromHours(-4)), zone);
             TestHelper.AssertXmlRoundtrip(value, "<value zone=\"Eastern Standard Time\">2013-04-12T17:53:23-04</value>");
         }
@@ -432,7 +457,7 @@ namespace NodaTime.Test
         [Test]
         public void XmlSerialization_NonIso()
         {
-            DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Tzdb;
+            XmlSerializationSettings.DateTimeZoneProvider = DateTimeZoneProviders.Tzdb;
             var zone = DateTimeZoneProviders.Tzdb["America/New_York"];
             var localDateTime = new LocalDateTime(2013, 6, 12, 17, 53, 23, CalendarSystem.Julian);
             var value = new ZonedDateTime(localDateTime.WithOffset(Offset.FromHours(-4)), zone);
@@ -447,7 +472,7 @@ namespace NodaTime.Test
         [TestCase("<value zone=\"Europe/London\">2013-04-12T17:53:23-04</value>", typeof(UnparsableValueException), Description = "Incorrect offset")]
         public void XmlSerialization_Invalid(string xml, Type expectedExceptionType)
         {
-            DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Tzdb;
+            XmlSerializationSettings.DateTimeZoneProvider = DateTimeZoneProviders.Tzdb;
             TestHelper.AssertXmlInvalid<ZonedDateTime>(xml, expectedExceptionType);
         }
 
@@ -464,7 +489,7 @@ namespace NodaTime.Test
         {
             var local = new LocalDateTime(2013, 7, 23, 13, 05, 20);
             ZonedDateTime zoned = local.InZoneStrictly(SampleZone);
-            Assert.AreEqual("2013/07/23 13:05:20 Single", zoned.ToString("yyyy/MM/dd HH:mm:ss z", CultureInfo.InvariantCulture));
+            Assert.AreEqual("2013/07/23 13:05:20 Single", zoned.ToString("uuuu/MM/dd HH:mm:ss z", CultureInfo.InvariantCulture));
         }
 
         [Test]

@@ -5,6 +5,7 @@
 using NodaTime.Utility;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace NodaTime.TimeZones
 {
@@ -52,7 +53,7 @@ namespace NodaTime.TimeZones
         internal ZoneInterval GetZoneInterval(Instant instant)
         {
             Preconditions.DebugCheckArgument(instant >= Start && instant < End, nameof(instant),
-                "Value {0} was not in the range [{0}, {1})", instant, Start, End);
+                "Value {0} was not in the range [{1}, {2})", instant, Start, End);
             var interval = map.GetZoneInterval(instant);
             // Clamp the interval for the sake of sanity. Checking this every time isn't very efficient,
             // but we're not expecting this to be called too often, due to caching.
@@ -104,10 +105,12 @@ namespace NodaTime.TimeZones
                 if (current is null)
                 {
                     current = next;
-                    Preconditions.DebugCheckArgument(current.Start == Instant.BeforeMinValue, nameof(maps), "First partial map must start at the beginning of time");
+                    Preconditions.DebugCheckArgument(current.Start == Instant.BeforeMinValue, nameof(maps), "First partial map must start at the beginning of time. Actual start: {0:uuuu-MM-dd'T'HH:mm:ss.FFFFFFF}",
+                        current.Start);
                     continue;
                 }
-                Preconditions.DebugCheckArgument(current.End == next.Start, nameof(maps), "Maps must abut");
+                Preconditions.DebugCheckArgument(current.End == next.Start, nameof(maps),
+                    "Maps must abut: {0:uuuu-MM-dd'T'HH:mm:ss.FFFFFFF}Z != {1:uuuu-MM-dd'T'HH:mm:ss.FFFFFFF}Z", current.End, next.Start);
 
                 if (next.Start == next.End)
                 {
@@ -173,9 +176,14 @@ namespace NodaTime.TimeZones
         {
             private readonly PartialZoneIntervalMap[] partialMaps;
 
+            public Offset MinOffset { get; }
+            public Offset MaxOffset { get; }
+
             internal CombinedPartialZoneIntervalMap(PartialZoneIntervalMap[] partialMaps)
             {
                 this.partialMaps = partialMaps;
+                MinOffset = partialMaps.Aggregate(Offset.MaxValue, (min, partialMap) => Offset.Min(min, partialMap.map.MinOffset));
+                MaxOffset = partialMaps.Aggregate(Offset.MinValue, (max, partialMap) => Offset.Max(max, partialMap.map.MaxOffset));
             }
 
             public ZoneInterval GetZoneInterval(Instant instant)

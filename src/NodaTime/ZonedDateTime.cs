@@ -10,11 +10,17 @@ using NodaTime.TimeZones;
 using NodaTime.Utility;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Xml;
 using System.Xml.Schema;
 using System.Xml.Serialization;
+
+// Do not nest type X.
+// The rule is somewhat subjective, but more importantly these have been available
+// publicly for a while, so we can't change them now anyway.
+#pragma warning disable CA1034
 
 namespace NodaTime
 {
@@ -22,7 +28,7 @@ namespace NodaTime
     // reference to avoid being resolved to the LocalDateTime property instead.
 
     /// <summary>
-    /// A <see cref="T:NodaTime.LocalDateTime" /> in a specific time zone and with a particular offset to distinguish
+    /// A <see cref="NodaTime.LocalDateTime" /> in a specific time zone and with a particular offset to distinguish
     /// between otherwise-ambiguous instants. A <see cref="ZonedDateTime"/> is global, in that it maps to a single
     /// <see cref="Instant"/>.
     /// </summary>
@@ -40,6 +46,8 @@ namespace NodaTime
     /// </para>
     /// </remarks>
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
+    [TypeConverter(typeof(ZonedDateTimeTypeConverter))]
+    [XmlSchemaProvider(nameof(AddSchema))]
     public readonly struct ZonedDateTime : IEquatable<ZonedDateTime>, IFormattable, IXmlSerializable
     {
         private readonly OffsetDateTime offsetDateTime;
@@ -97,8 +105,7 @@ namespace NodaTime
             // Not using Preconditions, to avoid building the string unnecessarily.
             if (correctOffset != offset)
             {
-                throw new ArgumentException("Offset " + offset + " is invalid for local date and time " + localDateTime
-                    + " in time zone " + zone.Id, nameof(offset));
+                throw new ArgumentException($"Offset {offset} is invalid for local date and time {localDateTime} in time zone {zone.Id}", nameof(offset));
 
             }
             offsetDateTime = new OffsetDateTime(localDateTime, offset);
@@ -117,7 +124,7 @@ namespace NodaTime
         /// </summary>
         /// <remarks>
         /// The returned
-        /// <see cref="T:NodaTime.LocalDateTime"/> will have the same calendar system and return the same values for
+        /// <see cref="NodaTime.LocalDateTime"/> will have the same calendar system and return the same values for
         /// each of the calendar properties (Year, MonthOfYear and so on), but will not be associated with any
         /// particular time zone.
         /// </remarks>
@@ -252,7 +259,7 @@ namespace NodaTime
         /// <remarks>
         /// This is always an unambiguous conversion. Any difficulties due to daylight saving
         /// transitions or other changes in time zone are handled when converting from a
-        /// <see cref="T:NodaTime.LocalDateTime" /> to a <see cref="ZonedDateTime"/>; the <c>ZonedDateTime</c> remembers
+        /// <see cref="NodaTime.LocalDateTime" /> to a <see cref="ZonedDateTime"/>; the <c>ZonedDateTime</c> remembers
         /// the actual offset from UTC to local time, so it always knows the exact instant represented.
         /// </remarks>
         /// <returns>The instant corresponding to this value.</returns>
@@ -537,12 +544,12 @@ namespace NodaTime
         /// Formats the value of the current instance using the specified pattern.
         /// </summary>
         /// <returns>
-        /// A <see cref="T:System.String" /> containing the value of the current instance in the specified format.
+        /// A <see cref="System.String" /> containing the value of the current instance in the specified format.
         /// </returns>
-        /// <param name="patternText">The <see cref="T:System.String" /> specifying the pattern to use,
+        /// <param name="patternText">The <see cref="System.String" /> specifying the pattern to use,
         /// or null to use the default format pattern ("G").
         /// </param>
-        /// <param name="formatProvider">The <see cref="T:System.IFormatProvider" /> to use when formatting the value,
+        /// <param name="formatProvider">The <see cref="System.IFormatProvider" /> to use when formatting the value,
         /// or null to use the current thread's culture to obtain a format provider.
         /// </param>
         /// <filterpriority>2</filterpriority>
@@ -567,6 +574,12 @@ namespace NodaTime
         /// <para>
         /// If the offset has a non-zero second component, this is truncated as <c>DateTimeOffset</c> has an offset
         /// granularity of minutes.
+        /// </para>
+        /// <para>
+        /// <see cref="DateTimeOffset"/> uses the Gregorian calendar by definition, so the value is implicitly converted
+        /// to the Gregorian calendar first. The result will be the same instant in time (potentially truncated as described
+        /// above), but the values returned by the Year/Month/Day properties of the <see cref="DateTimeOffset"/> may not
+        /// match the Year/Month/Day properties of this value.
         /// </para>
         /// </remarks>
         /// <exception cref="InvalidOperationException">The date/time is outside the range of <c>DateTimeOffset</c>,
@@ -618,6 +631,12 @@ namespace NodaTime
         /// <para>
         /// If the date and time is not on a tick boundary (the unit of granularity of DateTime) the value will be truncated
         /// towards the start of time.
+        /// </para>
+        /// <para>
+        /// <see cref="DateTime"/> uses the Gregorian calendar by definition, so the value is implicitly converted
+        /// to the Gregorian calendar first. The result will be on the same physical date,
+        /// but the values returned by the Year/Month/Day properties of the <see cref="DateTime"/> may not
+        /// match the Year/Month/Day properties of this value.
         /// </para>
         /// </remarks>
         /// <exception cref="InvalidOperationException">The date/time is outside the range of <c>DateTime</c>.</exception>
@@ -788,6 +807,13 @@ namespace NodaTime
         #endregion
 
         #region XML serialization
+        /// <summary>
+        /// Adds the XML schema type describing the structure of the <see cref="ZonedDateTime"/> XML serialization to the given <paramref name="xmlSchemaSet"/>.
+        /// </summary>
+        /// <param name="xmlSchemaSet">The XML schema set provided by <see cref="XmlSchemaExporter"/>.</param>
+        /// <returns>The qualified name of the schema type that was added to the <paramref name="xmlSchemaSet"/>.</returns>
+        public static XmlQualifiedName AddSchema(XmlSchemaSet xmlSchemaSet) => Xml.XmlSchemaDefinition.AddZonedDateTimeSchemaType(xmlSchemaSet);
+
         /// <inheritdoc />
         XmlSchema IXmlSerializable.GetSchema() => null!; // TODO(nullable): Return XmlSchema? when docfx works with that
 
@@ -800,7 +826,7 @@ namespace NodaTime
             {
                 throw new ArgumentException("No zone specified in XML for ZonedDateTime");
             }
-            DateTimeZone newZone = DateTimeZoneProviders.Serialization[reader.Value];
+            DateTimeZone newZone = Xml.XmlSerializationSettings.DateTimeZoneProvider[reader.Value];
             if (reader.MoveToAttribute("calendar"))
             {
                 string newCalendarId = reader.Value;

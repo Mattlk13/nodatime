@@ -34,7 +34,7 @@ namespace NodaTime
     /// <para>
     /// <see cref="Period"/> equality is implemented by comparing each property's values individually, without any normalization.
     /// (For example, a period of "24 hours" is not considered equal to a period of "1 day".) The static
-    /// <see cref="NormalizingEqualityComparer"/> comparer provides an equality comparer which performs normalization before comparsions.
+    /// <see cref="NormalizingEqualityComparer"/> comparer provides an equality comparer which performs normalization before comparisons.
     /// </para>
     /// <para>
     /// There is no natural ordering for periods, but <see cref="CreateComparer(LocalDateTime)"/> can be used to create a
@@ -285,7 +285,7 @@ namespace NodaTime
         public static Period FromTicks(long ticks) => new Period(0L, 0L, 0L, 0L, ticks, 0L);
 
         /// <summary>
-        /// Creates a period representing the specified number of nanooseconds.
+        /// Creates a period representing the specified number of nanoseconds.
         /// </summary>
         /// <param name="nanoseconds">The number of nanoseconds in the new period</param>
         /// <returns>A period consisting of the given number of nanoseconds.</returns>
@@ -314,6 +314,15 @@ namespace NodaTime
                 left.Ticks + right.Ticks,
                 left.Nanoseconds + right.Nanoseconds);
         }
+
+        /// <summary>
+        /// Adds two periods together, by simply adding the values for each property.
+        /// </summary>
+        /// <param name="left">The first period to add</param>
+        /// <param name="right">The second period to add</param>
+        /// <returns>The sum of the two periods. The units of the result will be the union of those in both
+        /// periods.</returns>
+        public static Period Add(Period left, Period right) => left + right;
 
         /// <summary>
         /// Creates an <see cref="IComparer{T}"/> for periods, using the given "base" local date/time.
@@ -355,6 +364,33 @@ namespace NodaTime
         }
 
         /// <summary>
+        /// Subtracts one period from another, by simply subtracting each property value.
+        /// </summary>
+        /// <param name="minuend">The period to subtract the second operand from</param>
+        /// <param name="subtrahend">The period to subtract the first operand from</param>
+        /// <returns>The result of subtracting all the values in the second operand from the values in the first. The
+        /// units of the result will be the union of both periods, even if the subtraction caused some properties to
+        /// become zero (so "2 weeks, 1 days" minus "2 weeks" is "zero weeks, 1 days", not "1 days").</returns>
+        public static Period Subtract(Period minuend, Period subtrahend) => minuend - subtrahend;
+
+        /// <summary>
+        /// Returns the number of days between two <see cref="LocalDate"/> objects.
+        /// </summary>
+        /// <param name="start">Start date/time</param>
+        /// <param name="end">End date/time</param> 
+        /// <exception cref="ArgumentException"><paramref name="start"/> and <paramref name="end"/> use different calendars.</exception>
+        /// <returns>The number of days between the given dates.</returns>
+        public static int DaysBetween(LocalDate start, LocalDate end)
+        {
+            Preconditions.CheckArgument(
+                start.Calendar.Equals(end.Calendar),
+                nameof(end),
+                "start and end must use the same calendar system");
+
+            return InternalDaysBetween(start, end);
+        }
+
+        /// <summary>
         /// Returns the period between a start and an end date/time, using only the given units.
         /// </summary>
         /// <remarks>
@@ -382,7 +418,7 @@ namespace NodaTime
                 return Zero;
             }
 
-            // Adjust for situations like "days between 5th January 10am and 7th Janary 5am" which should be one
+            // Adjust for situations like "days between 5th January 10am and 7th January 5am" which should be one
             // day, because if we actually reach 7th January with date fields, we've overshot.
             // The date adjustment will always be valid, because it's just moving it towards start.
             // We need this for all date-based period fields. We could potentially optimize by not doing this
@@ -406,7 +442,7 @@ namespace NodaTime
                 case PeriodUnits.Years: return FromYears(DatePeriodFields.YearsField.UnitsBetween(start.Date, endDate));
                 case PeriodUnits.Months: return FromMonths(DatePeriodFields.MonthsField.UnitsBetween(start.Date, endDate));
                 case PeriodUnits.Weeks: return FromWeeks(DatePeriodFields.WeeksField.UnitsBetween(start.Date, endDate));
-                case PeriodUnits.Days: return FromDays(DaysBetween(start.Date, endDate));
+                case PeriodUnits.Days: return FromDays(InternalDaysBetween(start.Date, endDate));
                 case PeriodUnits.Hours: return FromHours(TimePeriodField.Hours.UnitsBetween(start, end));
                 case PeriodUnits.Minutes: return FromMinutes(TimePeriodField.Minutes.UnitsBetween(start, end));
                 case PeriodUnits.Seconds: return FromSeconds(TimePeriodField.Seconds.UnitsBetween(start, end));
@@ -577,7 +613,7 @@ namespace NodaTime
                 case PeriodUnits.Years: return FromYears(DatePeriodFields.YearsField.UnitsBetween(start, end));
                 case PeriodUnits.Months: return FromMonths(DatePeriodFields.MonthsField.UnitsBetween(start, end));
                 case PeriodUnits.Weeks: return FromWeeks(DatePeriodFields.WeeksField.UnitsBetween(start, end));
-                case PeriodUnits.Days: return FromDays(DaysBetween(start, end));
+                case PeriodUnits.Days: return FromDays(InternalDaysBetween(start, end));
             }
 
             // Multiple fields
@@ -663,7 +699,7 @@ namespace NodaTime
         /// Returns the number of days between two dates. This allows optimizations in DateInterval,
         /// and for date calculations which just use days - we don't need state or a virtual method invocation.
         /// </summary>
-        internal static int DaysBetween(LocalDate start, LocalDate end)
+        internal static int InternalDaysBetween(LocalDate start, LocalDate end)
         {
             // We already assume the calendars are the same.
             if (start.YearMonthDay == end.YearMonthDay)
@@ -678,6 +714,70 @@ namespace NodaTime
             int endDays = end.DaysSinceEpoch;
             return endDays - startDays;
         }
+
+        /// <summary>
+        /// Returns the period between a start and an end <see cref="YearMonth"/>, using only the given units.
+        /// </summary>
+        /// <remarks>
+        /// If <paramref name="end"/> is before <paramref name="start" />, each property in the returned period
+        /// will be negative. If the given set of units cannot exactly reach the end point (e.g. finding
+        /// the difference between February 2010 and March 2012 in years) the result will be such that adding it to <paramref name="start"/>
+        /// will give a value between <paramref name="start"/> and <paramref name="end"/>. In other words,
+        /// any rounding is "towards start"; this is true whether the resulting period is negative or positive.
+        /// </remarks>
+        /// <param name="start">Start year and month</param>
+        /// <param name="end">End year and month</param>
+        /// <param name="units">Units to use for calculations</param>
+        /// <exception cref="ArgumentException"><paramref name="units"/> is empty or contains anything other than than PeriodUnits.Years
+        /// and/or PeriodUnits.Months.</exception>
+        /// <exception cref="ArgumentException"><paramref name="start"/> and <paramref name="end"/> use different calendars.</exception>
+        /// <returns>The period between the given YearMonths, using the given units.</returns>
+        [Pure]
+        public static Period Between(YearMonth start, YearMonth end, PeriodUnits units)
+        {
+            Preconditions.CheckArgument((units & (PeriodUnits.AllUnits ^ PeriodUnits.Years ^ PeriodUnits.Months)) == 0,
+                nameof(units), "Units can only contain year and month units: {0}", units);
+            Preconditions.CheckArgument(units != 0, nameof(units), "Units must not be empty");
+            Preconditions.CheckArgument((units & ~PeriodUnits.AllUnits) == 0, nameof(units), "Units contains an unknown value: {0}", units);
+            CalendarSystem calendar = start.Calendar;
+            Preconditions.CheckArgument(calendar.Equals(end.Calendar), nameof(end), "start and end must use the same calendar system");
+
+            if (start == end)
+            {
+                return Zero;
+            }
+
+            LocalDate startDate = start.StartDate;
+            LocalDate endDate = end.StartDate;
+
+            // Optimization for single field
+            switch (units)
+            {
+                case PeriodUnits.Years: return FromYears(DatePeriodFields.YearsField.UnitsBetween(startDate, endDate));
+                case PeriodUnits.Months: return FromMonths(DatePeriodFields.MonthsField.UnitsBetween(startDate, endDate));
+            }
+
+            // Multiple fields
+            DateComponentsBetween(startDate, endDate, units, out int years, out int months, out _, out _);
+            return new Period(years, months, 0, 0);
+        }
+
+        /// <summary>
+        /// Returns the exact difference between two <see cref="YearMonth"/>.
+        /// </summary>
+        /// <remarks>
+        /// If <paramref name="end"/> is before <paramref name="start" />, each property in the returned period
+        /// will be negative.
+        /// The calendar systems of the two dates must be the same; an exception will be thrown otherwise.
+        /// </remarks>
+        /// <param name="start">Start year and month</param>
+        /// <param name="end">End year and month</param>
+        /// <returns>The period between the two YearMonths, using year and month units.</returns>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="start"/> and <paramref name="end"/> are not in the same calendar system.
+        /// </exception>
+        [Pure]
+        public static Period Between(YearMonth start, YearMonth end) => Between(start, end, PeriodUnits.Years | PeriodUnits.Months);
 
         /// <summary>
         /// Returns whether or not this period contains any non-zero-valued time-based properties (hours or lower).
@@ -823,6 +923,24 @@ namespace NodaTime
             Milliseconds == other.Milliseconds &&
             Ticks == other.Ticks &&
             Nanoseconds == other.Nanoseconds;
+
+        /// <summary>
+        /// Implements the operator == (equality).
+        /// See the type documentation for a description of equality semantics.
+        /// </summary>
+        /// <param name="left">The left hand side of the operator.</param>
+        /// <param name="right">The right hand side of the operator.</param>
+        /// <returns><c>true</c> if values are equal to each other, otherwise <c>false</c>.</returns>
+        public static bool operator ==(Period? left, Period? right) => ReferenceEquals(left, right) || (left is object && left.Equals(right));
+
+        /// <summary>
+        /// Implements the operator != (inequality).
+        /// See the type documentation for a description of equality semantics.
+        /// </summary>
+        /// <param name="left">The left hand side of the operator.</param>
+        /// <param name="right">The right hand side of the operator.</param>
+        /// <returns><c>true</c> if values are not equal to each other, otherwise <c>false</c>.</returns>
+        public static bool operator !=(Period? left, Period? right) => !(left == right);
         #endregion
 
         /// <summary>

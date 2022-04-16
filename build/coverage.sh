@@ -6,28 +6,28 @@ set -e
 
 declare -r ROOT=$(realpath $(dirname $0)/..)
 declare -r TEST=$ROOT/src/NodaTime.Test
-declare -r DOTCOVER_VERSION=2019.1.1
-declare -r REPORTGENERATOR_VERSION=4.0.12
+declare -r DOTCOVER_VERSION=2021.3.3
+declare -r REPORTGENERATOR_VERSION=5.1.3
 
-nuget.exe install -Verbosity quiet -OutputDirectory $ROOT/packages -Version $DOTCOVER_VERSION JetBrains.dotCover.CommandLineTools
+export REPORTGENERATOR_VERSION
+export DOTCOVER_VERSION
+export DOTCOVER_PACKAGE_SUFFIX
+dotnet restore $ROOT/build/Coverage.proj --packages $ROOT/packages
 
-declare -r DOTCOVER=$ROOT/packages/JetBrains.dotCover.CommandLineTools.$DOTCOVER_VERSION/tools/dotCover.exe
+declare -r DOTCOVER_DIR=$ROOT/packages/jetbrains.dotcover.commandlinetools${DOTCOVER_PACKAGE_SUFFIX}/$DOTCOVER_VERSION/tools
 
 rm -rf $ROOT/coverage
 mkdir $ROOT/coverage
 
 # Run the tests under dotCover
-(cd $TEST; 
- $DOTCOVER cover coverageparams.xml -ReturnTargetExitCode)
-
-$DOTCOVER report -Source=$ROOT/coverage/NodaTime.dvcr -Output=$ROOT/coverage/coverage.xml -ReportType=DetailedXML ""
+(cd $DOTCOVER_DIR; 
+ ${DOTCOVER_EXECUTABLE:-"./dotcover.exe"} dotnet $TEST/coverageparams.xml --Output=$ROOT/coverage/coverage.xml --ReportType=DetailedXML --ReturnTargetExitCode -- test $TEST)
 
 if [[ $1 == "--report" ]]
 then
-  nuget.exe install -Verbosity quiet -OutputDirectory $ROOT/packages -Version $REPORTGENERATOR_VERSION ReportGenerator
-  declare -r REPORTGENERATOR=$ROOT/packages/ReportGenerator.$REPORTGENERATOR_VERSION/tools/net47/ReportGenerator.exe
+  declare -r REPORTGENERATOR=$ROOT/packages/reportgenerator/$REPORTGENERATOR_VERSION/tools/net6.0/ReportGenerator.dll
   
-  $REPORTGENERATOR \
+  dotnet $REPORTGENERATOR \
    -reports:$ROOT/coverage/coverage.xml \
    -targetdir:$ROOT/coverage/report \
    -verbosity:Error

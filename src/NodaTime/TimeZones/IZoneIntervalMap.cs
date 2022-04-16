@@ -16,12 +16,6 @@ namespace NodaTime.TimeZones
     internal interface IZoneIntervalMap
     {
         ZoneInterval GetZoneInterval(Instant instant);
-    }
-
-    // This is slightly ugly, but it allows us to use any time zone as the tail
-    // zone for PrecalculatedDateTimeZone, which is handy for testing.
-    internal interface IZoneIntervalMapWithMinMax : IZoneIntervalMap
-    {
         Offset MinOffset { get; }
         Offset MaxOffset { get; }
     }

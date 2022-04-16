@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eu -o pipefail
 
 cd $(dirname $0)
 
@@ -19,7 +19,7 @@ rm -rf tmp-nuget
 mkdir tmp-gcs
 mkdir tmp-nuget
 
-for version in 2.4
+for version in 2.4 3.0
 do
   echo "Updating ${version}"
   ./update-${version}.sh $1
@@ -32,7 +32,7 @@ echo "Copying files to storage"
 (cd tmp-gcs; gsutil.cmd cp *.zip gs://nodatime/releases)
 gsutil.cmd cp ../../src/NodaTime/TimeZones/Tzdb.nzd gs://nodatime/tzdb/tzdb$1.nzd
 echo "Hashing files"
-dotnet run -p ../HashStorageFiles
+dotnet run --project ../HashStorageFiles
 
 # Symbol packages appear to be ineffective at the moment; best to just
 # remove them (if any are even created; we don't use them now).

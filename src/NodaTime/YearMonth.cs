@@ -3,10 +3,13 @@
 // as found in the LICENSE.txt file.
 
 using JetBrains.Annotations;
+using NodaTime.Annotations;
 using NodaTime.Calendars;
 using NodaTime.Text;
 using NodaTime.Utility;
 using System;
+using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Xml;
 using System.Xml.Schema;
@@ -28,6 +31,8 @@ namespace NodaTime
     /// </para>
     /// </remarks>
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
+    [XmlSchemaProvider(nameof(AddSchema))]
+    [TypeConverter(typeof(YearMonthTypeConverter))]
     public struct YearMonth : IEquatable<YearMonth>, IComparable<YearMonth>, IComparable, IFormattable, IXmlSerializable
     {
         /// <summary>
@@ -39,7 +44,9 @@ namespace NodaTime
 
         /// <summary>Gets the calendar system associated with this year/month.</summary>
         /// <value>The calendar system associated with this year/month.</value>
-        public CalendarSystem Calendar => CalendarSystem.ForOrdinal(startOfMonth.CalendarOrdinal);
+        public CalendarSystem Calendar => CalendarSystem.ForOrdinal(CalendarOrdinal);
+
+        private CalendarOrdinal CalendarOrdinal => startOfMonth.CalendarOrdinal;
 
         /// <summary>Gets the year of this year/month.</summary>
         /// <remarks>This returns the "absolute year", so, for the ISO calendar,
@@ -91,7 +98,7 @@ namespace NodaTime
         }
 
         /// <summary>
-        /// Constructs an instance for the given year, month and day in the specified calendar.
+        /// Constructs an instance for the given year and month in the specified calendar.
         /// </summary>
         /// <param name="year">The year. This is the "absolute year", so, for
         /// the ISO calendar, a value of 0 means 1 BC, for example.</param>
@@ -141,6 +148,30 @@ namespace NodaTime
         public DateInterval ToDateInterval() => new DateInterval(StartDate, EndDate);
 
         /// <summary>
+        /// Returns a <see cref="YearMonth"/> object which is the result of adding the specified number
+        /// of months to this object.
+        /// </summary>
+        /// <param name="months">The number of months to add to this object.</param>
+        /// <returns>The resulting <see cref="YearMonth"/> after adding the specified number of months.</returns>
+        [Pure]
+        public YearMonth PlusMonths(int months) =>
+            OnDayOfMonth(1).PlusMonths(months).ToYearMonth();
+   
+        /// <summary>
+        /// Returns a <see cref="LocalDate"/> with the year/month of this value, and the given day of month.
+        /// </summary>
+        /// <param name="day">The day within the month.</param>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="day"/> does not fall within the
+        /// month represented by this value.</exception>
+        /// <returns>The result of combining this year and month with <paramref name="day"/>.</returns>
+        [Pure]
+        public LocalDate OnDayOfMonth(int day)
+        {
+            Preconditions.CheckArgumentRange(nameof(day), day, 1, Calendar.GetDaysInMonth(Year, Month));
+            return new LocalDate(Year, Month, day, Calendar);
+        }
+
+        /// <summary>
         /// Indicates whether this year/month is earlier, later or the same as another one.
         /// See the type documentation for a description of ordering semantics.
         /// </summary>
@@ -152,9 +183,15 @@ namespace NodaTime
         /// later than <paramref name="other"/>.</returns>
         public int CompareTo(YearMonth other)
         {
-            Preconditions.CheckArgument(Calendar.Equals(other.Calendar), nameof(other), "Only values with the same calendar system can be compared");
-            return Calendar.Compare(YearMonthDay, other.YearMonthDay);
+            Preconditions.CheckArgument(CalendarOrdinal == other.CalendarOrdinal, nameof(other), "Only values with the same calendar system can be compared");
+            return TrustedCompareTo(other);
         }
+
+        /// <summary>
+        /// Performs a comparison with another YearMonth, trusting that the calendar of the other date is already correct.
+        /// This avoids duplicate calendar checks.
+        /// </summary>
+        private int TrustedCompareTo([Trusted] YearMonth other) => Calendar.Compare(YearMonthDay, other.YearMonthDay);
 
         /// <summary>
         /// Implementation of <see cref="IComparable.CompareTo"/> to compare two YearMonth values.
@@ -169,7 +206,7 @@ namespace NodaTime
         /// <returns>The result of comparing this YearMonth with another one.
         /// If <paramref name="obj"/> is null, this method returns a value greater than 0.
         /// </returns>
-        int IComparable.CompareTo(object obj)
+        int IComparable.CompareTo(object? obj)
         {
             if (obj is null)
             {
@@ -177,6 +214,66 @@ namespace NodaTime
             }
             Preconditions.CheckArgument(obj is YearMonth, nameof(obj), "Object must be of type NodaTime.YearMonth.");
             return CompareTo((YearMonth) obj);
+        }
+
+        /// <summary>
+        /// Compares two YearMonth values to see if the left one is strictly earlier than the right one.
+        /// See the type documentation for a description of ordering semantics.
+        /// </summary>
+        /// <param name="lhs">First operand of the comparison</param>
+        /// <param name="rhs">Second operand of the comparison</param>
+        /// <exception cref="ArgumentException">The calendar system of <paramref name="rhs"/> is not the same
+        /// as the calendar of <paramref name="lhs"/>.</exception>
+        /// <returns>true if the <paramref name="lhs"/> is strictly earlier than <paramref name="rhs"/>, false otherwise.</returns>
+        public static bool operator <(YearMonth lhs, YearMonth rhs)
+        {
+            Preconditions.CheckArgument(lhs.CalendarOrdinal == rhs.CalendarOrdinal, nameof(rhs), "Only values in the same calendar can be compared");
+            return lhs.TrustedCompareTo(rhs) < 0;
+        }
+
+        /// <summary>
+        /// Compares two YearMonth values to see if the left one is earlier than or equal to the right one.
+        /// See the type documentation for a description of ordering semantics.
+        /// </summary>
+        /// <param name="lhs">First operand of the comparison</param>
+        /// <param name="rhs">Second operand of the comparison</param>
+        /// <exception cref="ArgumentException">The calendar system of <paramref name="rhs"/> is not the same
+        /// as the calendar of <paramref name="lhs"/>.</exception>
+        /// <returns>true if the <paramref name="lhs"/> is earlier than or equal to <paramref name="rhs"/>, false otherwise.</returns>
+        public static bool operator <=(YearMonth lhs, YearMonth rhs)
+        {
+            Preconditions.CheckArgument(lhs.CalendarOrdinal == rhs.CalendarOrdinal, nameof(rhs), "Only values in the same calendar can be compared");
+            return lhs.TrustedCompareTo(rhs) <= 0;
+        }
+
+        /// <summary>
+        /// Compares two YearMonth values to see if the left one is strictly later than the right one.
+        /// See the type documentation for a description of ordering semantics.
+        /// </summary>
+        /// <param name="lhs">First operand of the comparison</param>
+        /// <param name="rhs">Second operand of the comparison</param>
+        /// <exception cref="ArgumentException">The calendar system of <paramref name="rhs"/> is not the same
+        /// as the calendar of <paramref name="lhs"/>.</exception>
+        /// <returns>true if the <paramref name="lhs"/> is strictly later than <paramref name="rhs"/>, false otherwise.</returns>
+        public static bool operator >(YearMonth lhs, YearMonth rhs)
+        {
+            Preconditions.CheckArgument(lhs.CalendarOrdinal == rhs.CalendarOrdinal, nameof(rhs), "Only values in the same calendar can be compared");
+            return lhs.TrustedCompareTo(rhs) > 0;
+        }
+
+        /// <summary>
+        /// Compares two YearMonth values to see if the left one is later than or equal to the right one.
+        /// See the type documentation for a description of ordering semantics.
+        /// </summary>
+        /// <param name="lhs">First operand of the comparison</param>
+        /// <param name="rhs">Second operand of the comparison</param>
+        /// <exception cref="ArgumentException">The calendar system of <paramref name="rhs"/> is not the same
+        /// as the calendar of <paramref name="lhs"/>.</exception>
+        /// <returns>true if the <paramref name="lhs"/> is later than or equal to <paramref name="rhs"/>, false otherwise.</returns>
+        public static bool operator >=(YearMonth lhs, YearMonth rhs)
+        {
+            Preconditions.CheckArgument(lhs.CalendarOrdinal == rhs.CalendarOrdinal, nameof(rhs), "Only values in the same calendar can be compared");
+            return lhs.TrustedCompareTo(rhs) >= 0;
         }
 
         /// <summary>
@@ -223,20 +320,42 @@ namespace NodaTime
         /// <summary>
         /// Formats the value of the current instance using the specified pattern.
         /// </summary>
+        /// <remarks>
+        /// Unlike most <see cref="IFormattable"/> implementations, a <paramref name="patternText"/> of null with
+        /// the current thread's culture does not yield the same result as the parameterless <see cref="ToString()"/>
+        /// overload, for backward-compatibility reasons. (It uses the ISO format, which is culture-insensitive.)
+        /// </remarks>
         /// <returns>
-        /// A <see cref="T:System.String" /> containing the value of the current instance in the specified format.
+        /// A <see cref="System.String" /> containing the value of the current instance in the specified format.
         /// </returns>
-        /// <param name="patternText">The <see cref="T:System.String" /> specifying the pattern to use,
-        /// or null to use the default format pattern ("D").
+        /// <param name="patternText">The <see cref="System.String" /> specifying the pattern to use,
+        /// or null to use the ISO format pattern ("g").
         /// </param>
-        /// <param name="formatProvider">The <see cref="T:System.IFormatProvider" /> to use when formatting the value,
+        /// <param name="formatProvider">The <see cref="System.IFormatProvider" /> to use when formatting the value,
         /// or null to use the current thread's culture to obtain a format provider.
         /// </param>
         /// <filterpriority>2</filterpriority>
         public string ToString(string? patternText, IFormatProvider? formatProvider) =>
             YearMonthPattern.BclSupport.Format(this, patternText, formatProvider);
 
+        /// <summary>
+        /// Returns a <see cref="System.String" /> that represents this instance.
+        /// </summary>
+        /// <returns>
+        /// The value of the current instance in the culture-specific default format pattern ("G"), using the current thread's
+        /// culture to obtain a format provider.
+        /// </returns>
+        public override string ToString() =>
+            YearMonthPattern.BclSupport.Format(this, YearMonthPattern.CultureDefaultFormatPattern, CultureInfo.CurrentCulture);
+
         #region XML serialization
+        /// <summary>
+        /// Adds the XML schema type describing the structure of the <see cref="YearMonth"/> XML serialization to the given <paramref name="xmlSchemaSet"/>.
+        /// </summary>
+        /// <param name="xmlSchemaSet">The XML schema set provided by <see cref="XmlSchemaExporter"/>.</param>
+        /// <returns>The qualified name of the schema type that was added to the <paramref name="xmlSchemaSet"/>.</returns>
+        public static XmlQualifiedName AddSchema(XmlSchemaSet xmlSchemaSet) => Xml.XmlSchemaDefinition.AddYearMonthSchemaType(xmlSchemaSet);
+
         /// <inheritdoc />
         XmlSchema IXmlSerializable.GetSchema() => null!; // TODO(nullable): Return XmlSchema? when docfx works with that
 

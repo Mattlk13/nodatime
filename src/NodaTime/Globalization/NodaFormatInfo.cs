@@ -34,7 +34,7 @@ namespace NodaTime.Globalization
     {
         // Names that we can use to check for broken Mono behaviour.
         // The cloning is *also* to work around a Mono bug, where even read-only cultures can change...
-        // See http://bugzilla.xamarin.com/show_bug.cgi?id=3279
+        // See https://xamarin.github.io/bugzilla-archives/32/3279/bug.html
         private static readonly string[] ShortInvariantMonthNames = (string[]) CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedMonthNames.Clone();
         private static readonly string[] LongInvariantMonthNames = (string[]) CultureInfo.InvariantCulture.DateTimeFormat.MonthNames.Clone();
 
@@ -166,15 +166,15 @@ namespace NodaTime.Globalization
         /// Mono uses the invariant month names for the genitive month names by default, so we'll assume that
         /// if we see an invariant name, that *isn't* deliberately a genitive month name. A non-invariant culture
         /// which decided to have genitive month names exactly matching the invariant ones would be distinctly odd.
-        /// See http://bugzilla.xamarin.com/show_bug.cgi?id=3278 for more details and progress.
+        /// See https://xamarin.github.io/bugzilla-archives/32/3278/bug.html for more details and progress.
         /// </para>
         /// <para>
         /// Mono 3.0.6 has an exciting and different bug, where all the abbreviated genitive month names are just numbers ("1" etc).
         /// So again, if we detect that, we'll go back to the non-genitive version.
-        /// See http://bugzilla.xamarin.com/show_bug.cgi?id=11361 for more details and progress.
+        /// See https://xamarin.github.io/bugzilla-archives/11/11361/bug.html for more details and progress.
         /// </para>
         /// </remarks>
-        private IReadOnlyList<string> ConvertGenitiveMonthArray(IReadOnlyList<string> nonGenitiveNames, string[] bclNames, string[] invariantNames)
+        private static IReadOnlyList<string> ConvertGenitiveMonthArray(IReadOnlyList<string> nonGenitiveNames, string[] bclNames, string[] invariantNames)
         {
             if (int.TryParse(bclNames[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var _))
             {
@@ -347,32 +347,32 @@ namespace NodaTime.Globalization
         /// <summary>
         /// Gets the <see cref="Offset" /> "l" pattern.
         /// </summary>
-        public string OffsetPatternLong => PatternResources.ResourceManager.GetString("OffsetPatternLong", CultureInfo);
+        public string OffsetPatternLong => PatternResources.ResourceManager.GetString("OffsetPatternLong", CultureInfo)!;
 
         /// <summary>
         /// Gets the <see cref="Offset" /> "m" pattern.
         /// </summary>
-        public string OffsetPatternMedium => PatternResources.ResourceManager.GetString("OffsetPatternMedium", CultureInfo);
+        public string OffsetPatternMedium => PatternResources.ResourceManager.GetString("OffsetPatternMedium", CultureInfo)!;
 
         /// <summary>
         /// Gets the <see cref="Offset" /> "s" pattern.
         /// </summary>
-        public string OffsetPatternShort => PatternResources.ResourceManager.GetString("OffsetPatternShort", CultureInfo);
+        public string OffsetPatternShort => PatternResources.ResourceManager.GetString("OffsetPatternShort", CultureInfo)!;
 
         /// <summary>
         /// Gets the <see cref="Offset" /> "L" pattern.
         /// </summary>
-        public string OffsetPatternLongNoPunctuation => PatternResources.ResourceManager.GetString("OffsetPatternLongNoPunctuation", CultureInfo);
+        public string OffsetPatternLongNoPunctuation => PatternResources.ResourceManager.GetString("OffsetPatternLongNoPunctuation", CultureInfo)!;
 
         /// <summary>
         /// Gets the <see cref="Offset" /> "M" pattern.
         /// </summary>
-        public string OffsetPatternMediumNoPunctuation => PatternResources.ResourceManager.GetString("OffsetPatternMediumNoPunctuation", CultureInfo);
+        public string OffsetPatternMediumNoPunctuation => PatternResources.ResourceManager.GetString("OffsetPatternMediumNoPunctuation", CultureInfo)!;
 
         /// <summary>
         /// Gets the <see cref="Offset" /> "S" pattern.
         /// </summary>
-        public string OffsetPatternShortNoPunctuation => PatternResources.ResourceManager.GetString("OffsetPatternShortNoPunctuation", CultureInfo);
+        public string OffsetPatternShortNoPunctuation => PatternResources.ResourceManager.GetString("OffsetPatternShortNoPunctuation", CultureInfo)!;
 
         /// <summary>
         /// Clears the cache. Only used for test purposes.
@@ -419,14 +419,13 @@ namespace NodaTime.Globalization
             // Note: no caching for this case. It's a corner case anyway... we could add a cache later
             // if users notice a problem.
             DateTimeFormatInfo dateTimeFormatInfo => new NodaFormatInfo(CultureInfo.InvariantCulture, dateTimeFormatInfo),
-            // TODO(nullable): File a Roslyn bug, as provider really won't be null here.
-            _ => throw new ArgumentException($"Cannot use provider of type {provider!.GetType().FullName} in Noda Time", nameof(provider))
+            _ => throw new ArgumentException($"Cannot use provider of type {provider.GetType().FullName} in Noda Time", nameof(provider))
         };
 
         /// <summary>
         /// Returns a <see cref="System.String" /> that represents this instance.
         /// </summary>
-        public override string ToString() => "NodaFormatInfo[" + CultureInfo.Name + "]";
+        public override string ToString() => $"NodaFormatInfo[{CultureInfo.Name}]";
 
         /// <summary>
         /// The description for an era: the primary name and all possible names.
@@ -444,20 +443,23 @@ namespace NodaTime.Globalization
 
             internal static EraDescription ForEra(Era era, CultureInfo cultureInfo)
             {
-                string pipeDelimited = PatternResources.ResourceManager.GetString(era.ResourceIdentifier, cultureInfo);
+                string pipeDelimited = PatternResources.ResourceManager.GetString(era.ResourceIdentifier, cultureInfo)!;
                 string primaryName;
                 string[] allNames;
                 if (pipeDelimited is null)
                 {
-                    allNames = new string[0];
+                    allNames = Array.Empty<string>();
                     primaryName = "";
                 }
                 else
                 {
+                    // If the BCL has provided an era name other than the one we'd consider to be the primary one, make *that*
+                    // the primary one for formatting.
+                    // TODO: Achieve the same result without the string allocations.
                     string? eraNameFromCulture = GetEraNameFromBcl(era, cultureInfo);
-                    if (eraNameFromCulture != null && !pipeDelimited.StartsWith(eraNameFromCulture + "|"))
+                    if (eraNameFromCulture != null && !pipeDelimited.StartsWith(eraNameFromCulture + "|", StringComparison.Ordinal))
                     {
-                        pipeDelimited = eraNameFromCulture + "|" + pipeDelimited;
+                        pipeDelimited = $"{eraNameFromCulture}|{pipeDelimited}";
                     }
                     allNames = pipeDelimited.Split('|');
                     primaryName = allNames[0];

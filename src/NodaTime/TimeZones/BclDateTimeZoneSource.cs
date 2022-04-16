@@ -19,7 +19,8 @@ namespace NodaTime.TimeZones
     /// (i.e. "UTC" and "UTC+/-Offset").
     /// </para>
     /// <para>
-    /// This class is not available in the .NET Standard 1.3 version.
+    /// In Noda Time 1.x and 2.x, this class is only available on the .NET Framework builds of Noda Time, and not the
+    /// PCL (Noda Time 1.x) or .NET Standard 1.3 (Noda Time 2.x) builds.
     /// </para>
     /// </remarks>
     /// <threadsafety>This type maintains no state, and all members are thread-safe. See the thread safety section of the user guide for more information.</threadsafety>
@@ -82,7 +83,7 @@ namespace NodaTime.TimeZones
         /// This source returns a string such as "TimeZoneInfo: 3.5.0.0" corresponding to the version of the assembly
         /// containing <see cref="TimeZoneInfo"/>.
         /// </remarks>
-        public string VersionId => "TimeZoneInfo: " + typeof(TimeZoneInfo).Assembly.GetName().Version;
+        public string VersionId => $"TimeZoneInfo: {typeof(TimeZoneInfo).Assembly.GetName().Version}";
 
         /// <summary>
         /// Creates a new instance of <see cref="BclDateTimeZone" /> from the <see cref="TimeZoneInfo"/> with the given
@@ -96,6 +97,9 @@ namespace NodaTime.TimeZones
         /// </remarks>        
         DateTimeZone IDateTimeZoneSource.ForId(string id) => ForId(id);
 
+// Even though this member could be static, it would be inconsistent with the interface member.
+// It would also be a breaking change.
+#pragma warning disable CA1822 // Make this member static
         /// <summary>
         /// Creates a new instance of <see cref="BclDateTimeZone" /> from the <see cref="TimeZoneInfo"/> with the given
         /// ID. The ID must be a known system time zone ID.
@@ -115,6 +119,7 @@ namespace NodaTime.TimeZones
                 throw new ArgumentException(id + " is not a system time zone ID", nameof(id));
             }
         }
+#pragma warning restore CA1822
 
         // Note: if TimeZoneInfo.Local returns a null reference, we'll return a null reference here as well.
         // However, we *don't* attempt to validate that a non-null reference has a valid ID that can be looked up.

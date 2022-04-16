@@ -22,10 +22,16 @@ namespace NodaTime.TimeZones
     /// <para>
     /// This implementation does not always give the same results as <c>TimeZoneInfo</c>, in that it doesn't replicate
     /// the bugs in the BCL interpretation of the data. These bugs are described in
-    /// <a href="http://codeblog.jonskeet.uk/2014/09/30/the-mysteries-of-bcl-time-zone-data/">a blog post</a>, but we're
+    /// <a href="https://codeblog.jonskeet.uk/2014/09/30/the-mysteries-of-bcl-time-zone-data/">a blog post</a>, but we're
     /// not expecting them to be fixed any time soon. Being bug-for-bug compatible would not only be tricky, but would be painful
     /// if the BCL were ever to be fixed. As far as we are aware, there are only discrepancies around new year where the zone
     /// changes from observing one rule to observing another.
+    /// </para>
+    /// <para>
+    /// As of version 3.0, a new "incompatible but doing the right thing" category of differences has been implemented,
+    /// for time zones which have a transition at 24:00. The Windows time zone data represents this as a transition at 23:59:59.999,
+    /// and that's faithfully represented by TimeZoneInfo (and BclDateTimeZone in version 2.x). As of 3.0, this is spotted
+    /// and converted to a midnight-on-the-following-day transition.
     /// </para>
     /// </remarks>
     /// <threadsafety>This type is immutable reference type. See the thread safety section of the user guide for more information.</threadsafety>
@@ -53,8 +59,8 @@ namespace NodaTime.TimeZones
         /// <value>The display name associated with the time zone, as provided by the Base Class Library.</value>
         public string DisplayName => OriginalZone.DisplayName;
 
-        private BclDateTimeZone(TimeZoneInfo bclZone, Offset minOffset, Offset maxOffset, IZoneIntervalMap map)
-            : base(bclZone.Id, bclZone.SupportsDaylightSavingTime, minOffset, maxOffset)
+        private BclDateTimeZone(TimeZoneInfo bclZone, IZoneIntervalMap map)
+            : base(bclZone.Id, bclZone.SupportsDaylightSavingTime, map.MinOffset, map.MaxOffset)
         {
             this.OriginalZone = bclZone;
             this.map = map;
@@ -79,22 +85,24 @@ namespace NodaTime.TimeZones
             if (!bclZone.SupportsDaylightSavingTime || rules.Length == 0)
             {
                 var fixedInterval = new ZoneInterval(bclZone.StandardName, Instant.BeforeMinValue, Instant.AfterMaxValue, standardOffset, Offset.Zero);
-                return new BclDateTimeZone(bclZone, standardOffset, standardOffset, new SingleZoneIntervalMap(fixedInterval));
+                return new BclDateTimeZone(bclZone, new SingleZoneIntervalMap(fixedInterval));
             }
 
-            int windowsRules = rules.Count(IsWindowsRule);
-            var ruleConverter = AreWindowsStyleRules(rules)
-                ? rule => BclAdjustmentRule.FromWindowsAdjustmentRule(bclZone, rule)
-                : (Converter<TimeZoneInfo.AdjustmentRule, BclAdjustmentRule>) (rule => BclAdjustmentRule.FromUnixAdjustmentRule(bclZone, rule));
-
-            BclAdjustmentRule[] convertedRules = Array.ConvertAll(rules, ruleConverter);
-
-            Offset minRuleOffset = convertedRules.Aggregate(Offset.MaxValue, (min, rule) => Offset.Min(min, rule.Savings + rule.StandardOffset));
-            Offset maxRuleOffset = convertedRules.Aggregate(Offset.MinValue, (min, rule) => Offset.Max(min, rule.Savings + rule.StandardOffset));
+            BclAdjustmentRule[] convertedRules;
+            if (AreWindowsStyleRules(rules))
+            {
+                convertedRules = Array.ConvertAll(rules, rule => BclAdjustmentRule.FromWindowsAdjustmentRule(bclZone, rule));
+            }
+            else
+            {
+                convertedRules = Array.ConvertAll(rules, rule => BclAdjustmentRule.FromUnixAdjustmentRule(bclZone, rule));
+                FixUnixTransitions(convertedRules);
+            }
 
             IZoneIntervalMap uncachedMap = BuildMap(convertedRules, standardOffset, bclZone.StandardName);
             IZoneIntervalMap cachedMap = CachingZoneIntervalMap.CacheMap(uncachedMap);
-            return new BclDateTimeZone(bclZone, Offset.Min(standardOffset, minRuleOffset), Offset.Max(standardOffset, maxRuleOffset), cachedMap);
+
+            return new BclDateTimeZone(bclZone, cachedMap);
         }
 
         /// <summary>
@@ -109,14 +117,50 @@ namespace NodaTime.TimeZones
 
             bool IsWindowsRule(TimeZoneInfo.AdjustmentRule rule) =>
                 rule.DateStart.Month == 1 && rule.DateStart.Day == 1 && rule.DateStart.TimeOfDay.Ticks == 0 &&
-                rule.DateEnd.Month == 12 && rule.DateEnd.Day == 31 && rule.DateEnd.TimeOfDay.Ticks == 0;
+                rule.DateEnd.Month == 12 && rule.DateEnd.Day == 31 && rule.DateEnd.TimeOfDay.Ticks == 0 &&
+                // In .NET 6.0 on Linux, some zones (e.g. Pacific/Wallis) conform to the above, but also have
+                // years that are earlier than we'd ever expect to see on Windows.
+                (rule.DateStart.Year == 1 || rule.DateStart.Year > 1600);
         }
 
-        private static bool IsWindowsRule(TimeZoneInfo.AdjustmentRule rule) =>
-            rule.DateStart.Month == 1 && rule.DateStart.Day == 1 && rule.DateStart.TimeOfDay.Ticks == 0 &&
-            rule.DateEnd.Month == 12 && rule.DateEnd.Day == 31 && rule.DateEnd.TimeOfDay.Ticks == 0;
+        /// <summary>
+        /// The Unix rules are sometimes either slightly disjoint, or overlap. Ideally, we should be able to remove
+        /// (or at least understand the need for) this code, but until then, it seems to make all the tests pass.
+        /// </summary>
+        internal static void FixUnixTransitions(BclAdjustmentRule[] rules)
+        {
+            for (int i = 0; i < rules.Length - 1; i++)
+            {
+                // If this rule ends after the next one starts, i.e. they overlap,
+                // truncate this rule's end time.
+                // Examples of when this is needed, in .NET 6 (on Linux):
+                // - Antarctica/Macquarie at the end of 2009
+                // - Europe/Dublin at the end of 2019
+                // - Europe/Prague at the end of 1946
+                if (rules[i].End > rules[i + 1].Start)
+                {
+                    // TODO: add a check that the difference is just DST.
+                    rules[i] = rules[i].WithEnd(rules[i + 1].Start);
+                }
+                // If this rule ends before the next one starts, i.e. there's a gap,
+                // and if that gap is the same length as DST, then bring forward the
+                // next rule by that DST gap (in other words, treat it as starting in DST instead
+                // of in standard time). This is sometimes needed for .NET 6 rules that are
+                // on year boundaries: there are two rules where the first one ends at the end of the year
+                // and the second one starts at the start of the next year, but they both have the same offset.
+                // Examples of when this is needed, in .NET 6 (on Linux):
+                // - America/Sao_Paolo at the end of 2017
+                // - Antarctica/Macquarie at the end of 2008
+                // - America/Creston at the end of 1943
+                else if (rules[i].End < rules[i + 1].Start && rules[i].End.PlusNanoseconds(rules[i + 1].Savings.Nanoseconds) == rules[i + 1].Start)
+                {
+                    rules[i + 1] = rules[i + 1].WithStart(rules[i].End);
+                }
+            }
+        }
 
-        private static IZoneIntervalMap BuildMap(BclAdjustmentRule[] rules, Offset standardOffset, string standardName)
+        // Visible for testing
+        internal static IZoneIntervalMap BuildMap(BclAdjustmentRule[] rules, Offset standardOffset, string standardName)
         {
             Preconditions.CheckNotNull(standardName, nameof(standardName));
 
@@ -154,19 +198,20 @@ namespace NodaTime.TimeZones
         /// <summary>
         /// Just a mapping of a TimeZoneInfo.AdjustmentRule into Noda Time types. Very little cleverness here.
         /// </summary>
-        private sealed class BclAdjustmentRule
+        [VisibleForTesting]
+        internal sealed class BclAdjustmentRule
         {
             private static readonly DateTime MaxDate = DateTime.MaxValue.Date;
 
             /// <summary>
             /// Instant on which this rule starts.
             /// </summary>
-            internal Instant Start { get; }
+            internal Instant Start => PartialMap.Start;
 
             /// <summary>
             /// Instant on which this rule ends.
             /// </summary>
-            internal Instant End { get; }
+            internal Instant End => PartialMap.End;
 
             /// <summary>
             /// Daylight savings, when applicable within this rule.
@@ -180,45 +225,100 @@ namespace NodaTime.TimeZones
 
             internal PartialZoneIntervalMap PartialMap { get; }
 
-            private BclAdjustmentRule(Instant start, Instant end, Offset standardOffset, Offset savings, PartialZoneIntervalMap partialMap)
+            // Visible for tests
+            internal BclAdjustmentRule(ZoneInterval zoneInterval)
             {
-                Start = start;
-                End = end;
+                StandardOffset = zoneInterval.StandardOffset;
+                Savings = zoneInterval.Savings;
+                PartialMap = PartialZoneIntervalMap.ForZoneInterval(zoneInterval);
+            }
+
+            private BclAdjustmentRule(Offset standardOffset, Offset savings, PartialZoneIntervalMap partialMap)
+            {
                 StandardOffset = standardOffset;
                 Savings = savings;
                 PartialMap = partialMap;
             }
+            internal BclAdjustmentRule WithStart(Instant newStart) =>
+                new BclAdjustmentRule(StandardOffset, Savings, PartialMap.WithStart(newStart));
+
+            internal BclAdjustmentRule WithEnd(Instant newEnd) =>
+                new BclAdjustmentRule(StandardOffset, Savings, PartialMap.WithEnd(newEnd));
 
             internal static BclAdjustmentRule FromUnixAdjustmentRule(TimeZoneInfo zone, TimeZoneInfo.AdjustmentRule rule)
             {
+                // In .NET 6.0 (and onwards, presumably) the final rule is an alternating standard/daylight rule instead
+                // of a single zone interval. We can handle it as we do rules on Windows.
+                if (!rule.DaylightTransitionStart.IsFixedDateRule || !rule.DaylightTransitionEnd.IsFixedDateRule)
+                {
+                    return FromWindowsAdjustmentRule(zone, rule);
+                }
+
+                // This logic is also performed in the method below, but it's hard to remove that duplication
+                // without also making testing harder. (When everything's working, we might refactor.)
+                DateTime ruleStartLocal = rule.DateStart + rule.DaylightTransitionStart.TimeOfDay.TimeOfDay;
+                DateTime ruleStartUtc = DateTime.SpecifyKind(ruleStartLocal.Year == 1 ? DateTime.MinValue : ruleStartLocal - zone.BaseUtcOffset, DateTimeKind.Utc);
+                var forceDaylight = zone.IsDaylightSavingTime(ruleStartUtc) && rule.DaylightDelta == TimeSpan.Zero;
+#if NET6_0_OR_GREATER
+                var ruleStandardOffset = zone.BaseUtcOffset + rule.BaseUtcOffsetDelta;
+#else
+                var ruleStandardOffset = zone.GetUtcOffset(ruleStartUtc);
+                if (zone.IsDaylightSavingTime(ruleStartUtc))
+                {
+                    ruleStandardOffset -= rule.DaylightDelta;
+                }
+#endif
+                return ConvertUnixRuleToBclAdjustmentRule(rule, zone.StandardName, zone.DaylightName, zone.BaseUtcOffset, ruleStandardOffset, forceDaylight);                
+            }
+
+            [VisibleForTesting]
+            internal static BclAdjustmentRule ConvertUnixRuleToBclAdjustmentRule(TimeZoneInfo.AdjustmentRule rule,
+                string standardName, string daylightName, TimeSpan zoneStandardOffset, TimeSpan ruleStandardOffset,
+                bool forceDaylightSavings)
+            {
                 // On .NET Core on Unix, each "adjustment rule" is effectively just a zone interval. The transitions are only used
                 // to give the time of day values to combine with rule.DateStart and rule.DateEnd. It's all a bit odd.
-                // The *last* adjustment rule internally can work like a normal Windows standard/daylight rule, but currently that's
-                // not exposed properly.
-                var bclLocalStart = rule.DateStart + rule.DaylightTransitionStart.TimeOfDay.TimeOfDay;
-                var bclLocalEnd = rule.DateEnd + rule.DaylightTransitionEnd.TimeOfDay.TimeOfDay;
-                var bclUtcStart = DateTime.SpecifyKind(bclLocalStart == DateTime.MinValue ? DateTime.MinValue : bclLocalStart - zone.BaseUtcOffset, DateTimeKind.Utc);
-                var bclWallOffset = zone.GetUtcOffset(bclUtcStart);
-                var bclSavings = rule.DaylightDelta;
-                var bclUtcEnd = DateTime.SpecifyKind(rule.DateEnd == MaxDate ? DateTime.MaxValue : bclLocalEnd - (zone.BaseUtcOffset + bclSavings), DateTimeKind.Utc);
-                var isDst = zone.IsDaylightSavingTime(bclUtcStart);
+                // The *last* adjustment rule internally can work like a normal Windows standard/daylight rule, but that's only
+                // exposed in .NET 6.0, and those rules are handled in FromUnixAdjustmentRule.
+                // (Currently we don't have a way of handling a fixed-date rule to the end of time that really represents alternating
+                // standard/daylight. Apparently that's not an issue.)
 
-                // The BCL rule can't express "It's DST with a changed standard time" so we sometimes end
-                // up with DST but no savings. Assume this means a savings of 1 hour. That's not a valid
-                // assumption in all cases, but it's probably better than alternatives, given limited information.
-                if (isDst && bclSavings == TimeSpan.Zero)
+                // The start of each rule is indicated by the start date with the time-of-day of the transition, interpreted as being in the *zone* standard offset
+                // (rather than the *rule* standard offset). Some rules effectively start in daylight time, but only when there are consecutive daylight time
+                // rules. This is handled in FixOverlappingUnixRules.
+
+                var bclLocalStart = rule.DateStart + rule.DaylightTransitionStart.TimeOfDay.TimeOfDay;
+                var bclUtcStart = DateTime.SpecifyKind(bclLocalStart == DateTime.MinValue ? DateTime.MinValue : bclLocalStart - zoneStandardOffset, DateTimeKind.Utc);
+                var bclSavings = rule.DaylightDelta;
+
+                // The end of each rule is indicated by the start date with the time-of-day of the transition, interpreted as being in the *zone* standard offset
+                // with the *rule* daylight delta.
+                var bclLocalEnd = rule.DateEnd + rule.DaylightTransitionEnd.TimeOfDay.TimeOfDay;
+                var bclUtcEnd = DateTime.SpecifyKind(rule.DateEnd == MaxDate ? DateTime.MaxValue : bclLocalEnd - (zoneStandardOffset + bclSavings), DateTimeKind.Utc);
+
+                // For just a couple of time zones in .NET 6, there are adjustment rules which appear to be invalid
+                // in the normal expectation of "starts in standard, ends in daylight".
+                // Example in America/Creston: 1944-01-01 - 1944-01-01: Daylight delta: +01; DST starts January 01 at 00:00:00 and ends January 01 at 00:00:59.999
+                // Handle this by treating the rule as starting in daylight time.
+                if (bclUtcStart >= bclUtcEnd)
+                {
+                    bclUtcStart -= bclSavings;
+                }
+
+                // If the zone says that the start of the rule is in DST, but the rule has no daylight savings,
+                // assume we actually want an hour of DST but one less hour of standard offset.
+                // See Europe/Dublin in 1960 for example, in .NET 6:
+                // 1960-04-10 - 1960-10-02: Daylight delta: +00; DST starts April 10 at 03:00:00 and ends October 02 at 02:59:59.999 (force daylight)
+                if (forceDaylightSavings)
                 {
                     bclSavings = TimeSpan.FromHours(1);
-                }
-                // Sometimes the rule says "This rule doesn't apply daylight savings" but still has a daylight
-                // savings delta. Extremely bizarre: just override the savings to zero.
-                if (!isDst && bclSavings != TimeSpan.Zero)
-                {
-                    bclSavings = TimeSpan.Zero;
+                    ruleStandardOffset -= bclSavings;
                 }
 
-                // Handle changes crossing the international date line, which are represented as savings of +/-23
+                // Handle changes crossing the international date line, which used to be represented as savings of +/-23
                 // hours (but could conceivably be more).
+                // Note: I can't currently reproduce this in .NET Core 3.1 or .NET 6. It may be a legacy Mono artifact;
+                // it does no harm to preserve it, however.
                 if (bclSavings.Hours < -14)
                 {
                     bclSavings += TimeSpan.FromDays(1);
@@ -227,19 +327,21 @@ namespace NodaTime.TimeZones
                 {
                     bclSavings -= TimeSpan.FromDays(1);
                 }
-                var bclStandard = bclWallOffset - bclSavings;
 
                 // Now all the values are sensible - and in particular, now the daylight savings are in a range that can be represented by
                 // Offset - we can converted everything to Noda Time types.
                 var nodaStart = bclUtcStart == DateTime.MinValue ? Instant.BeforeMinValue : bclUtcStart.ToInstant();
-                // The representation returned to us (not the internal representation) has an end point one second before the transition.
-                var nodaEnd = bclUtcEnd == DateTime.MaxValue ? Instant.AfterMaxValue : bclUtcEnd.ToInstant() + Duration.FromSeconds(1);
-                var nodaWallOffset = bclWallOffset.ToOffset();
-                var nodaStandard = bclStandard.ToOffset();
-                var nodaSavings = bclSavings.ToOffset();
+                // The representation returned to us (not the internal representation) has an end point one second (before .NET 6)
+                // or one millisecond (.NET 6 onwards) before the transition. We round up to a properly exclusive end instant.
+                var endTimeCompensation = Duration.FromSeconds(1) - Duration.FromMilliseconds(bclLocalEnd.Millisecond);
 
-                var partialMap = PartialZoneIntervalMap.ForZoneInterval(isDst ? zone.StandardName : zone.DaylightName, nodaStart, nodaEnd, nodaWallOffset, nodaSavings);
-                return new BclAdjustmentRule(nodaStart, nodaEnd, nodaStandard, nodaSavings, partialMap);
+                var nodaEnd = bclUtcEnd == DateTime.MaxValue ? Instant.AfterMaxValue : bclUtcEnd.ToInstant() + endTimeCompensation;
+                var nodaStandard = ruleStandardOffset.ToOffset();
+                var nodaSavings = bclSavings.ToOffset();
+                var nodaWallOffset = nodaStandard + nodaSavings;
+
+                var zoneInterval = new ZoneInterval(nodaSavings == Offset.Zero ? standardName : daylightName, nodaStart, nodaEnd, nodaWallOffset, nodaSavings);
+                return new BclAdjustmentRule(zoneInterval);
             }
 
             internal static BclAdjustmentRule FromWindowsAdjustmentRule(TimeZoneInfo zone, TimeZoneInfo.AdjustmentRule rule)
@@ -287,7 +389,7 @@ namespace NodaTime.TimeZones
                     }
                     partialMap = new PartialZoneIntervalMap(start, end, recurringMap);
                 }
-                return new BclAdjustmentRule(start, end, standardOffset, savings, partialMap);
+                return new BclAdjustmentRule(standardOffset, savings, partialMap);
             }
 
             /// <summary>
@@ -305,6 +407,9 @@ namespace NodaTime.TimeZones
             {
                 private readonly IZoneIntervalMap originalMap;
                 private readonly string daylightName;
+
+                public Offset MinOffset => originalMap.MinOffset;
+                public Offset MaxOffset => originalMap.MaxOffset;
 
                 internal DaylightFakingZoneIntervalMap(IZoneIntervalMap originalMap, string daylightName)
                 {
@@ -336,16 +441,29 @@ namespace NodaTime.TimeZones
                        standard.TimeOfDay.TimeOfDay < TimeSpan.FromMinutes(1);
             }
 
+            private static readonly LocalTime OneMillisecondBeforeMidnight = new LocalTime(23, 59, 59, 999);
+
             // Converts a TimeZoneInfo "TransitionTime" to a "ZoneYearOffset" - the two correspond pretty closely.
             private static ZoneYearOffset ConvertTransition(TimeZoneInfo.TransitionTime transitionTime)
             {
                 // Used for both fixed and non-fixed transitions.
                 LocalTime timeOfDay = LocalDateTime.FromDateTime(transitionTime.TimeOfDay).TimeOfDay;
 
+                // Transitions at midnight are represented in the Windows database by a transition one millisecond early.
+                // See BclDateTimeZoneTest.TransitionAtMidnight for a concrete example.
+                // We adjust to midnight to represent the correct data - it's clear this is just a data fudge.
+                // It's probably done like this to allow the rule to represent "Saturday 24:00" instead of "Sunday 00:00".
+                bool addDay = false;
+                if (timeOfDay == OneMillisecondBeforeMidnight)
+                {
+                    timeOfDay = LocalTime.Midnight;
+                    addDay = true;
+                }
+
                 // Easy case - fixed day of the month.
                 if (transitionTime.IsFixedDateRule)
                 {
-                    return new ZoneYearOffset(TransitionMode.Wall, transitionTime.Month, transitionTime.Day, 0, false, timeOfDay);
+                    return new ZoneYearOffset(TransitionMode.Wall, transitionTime.Month, transitionTime.Day, 0, false, timeOfDay, addDay);
                 }
 
                 // Floating: 1st Sunday in March etc.
@@ -365,7 +483,7 @@ namespace NodaTime.TimeZones
                     // Week 2 corresponds to ">=8" etc
                     dayOfMonth = (transitionTime.Week * 7) - 6;
                 }
-                return new ZoneYearOffset(TransitionMode.Wall, transitionTime.Month, dayOfMonth, dayOfWeek, advance, timeOfDay);
+                return new ZoneYearOffset(TransitionMode.Wall, transitionTime.Month, dayOfMonth, dayOfWeek, advance, timeOfDay, addDay);
             }
         }
 

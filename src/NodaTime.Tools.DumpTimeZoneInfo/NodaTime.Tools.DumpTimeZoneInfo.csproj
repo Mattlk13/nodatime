@@ -1,12 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
-    <Deterministic>True</Deterministic>
-    <IsPackable>False</IsPackable>
-    <LangVersion>preview</LangVersion>
-    <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <WarningsAsErrors />
+    <TargetFrameworks>netcoreapp3.1;net6.0</TargetFrameworks>
   </PropertyGroup>
 </Project>

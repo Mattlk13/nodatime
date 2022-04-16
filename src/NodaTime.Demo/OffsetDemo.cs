@@ -61,6 +61,78 @@ namespace NodaTime.Demo
             Offset offset = Snippet.For(Offset.FromTimeSpan(timespan));
             Assert.AreEqual(5400, offset.Seconds);
         }
+        
+        [Test]
+        public void Add()
+        {
+            var leftHandOffset = Offset.FromHours(5);
+            var rightHandOffset = Offset.FromHours(6);
+            var result = Snippet.For(Offset.Add(leftHandOffset, rightHandOffset));
+            Assert.AreEqual(Offset.FromHours(11), result);
+        }
+
+        [Test]
+        public void Substract()
+        {
+            var leftHandOffset = Offset.FromHours(7);
+            var rightHandOffset = Offset.FromHours(5);
+            var result = Snippet.For(Offset.Subtract(leftHandOffset, rightHandOffset));
+            Assert.AreEqual(Offset.FromHours(2), result);
+        }
+
+        [Test]
+        public void CompareTo()
+        {
+            var smallerOffset = Offset.FromHours(3);
+            var largerOffset = Offset.FromHours(5);
+
+            var lessThan = Snippet.For(smallerOffset.CompareTo(largerOffset));
+            var equal = smallerOffset.CompareTo(smallerOffset);
+            var greaterThan = largerOffset.CompareTo(smallerOffset);
+
+            Assert.Less(lessThan, 0);
+            Assert.AreEqual(0, equal);
+            Assert.Greater(greaterThan, 0);
+        }
+
+        [Test]
+        public void Equals()
+        {
+            var offset1 = Offset.FromHoursAndMinutes(1, 30);
+            var inequalOffset = Offset.FromHours(2);
+
+            var unequal = Snippet.For(offset1.Equals(inequalOffset));
+            var equal = offset1.Equals(offset1);
+
+            Assert.False(unequal);
+            Assert.True(equal);
+        }
+
+        [Test]
+        public void Max()
+        {
+            var smallerOffset = Offset.FromHours(3);
+            var largerOffset = Offset.FromHours(5);
+            var result = Snippet.For(Offset.Max(smallerOffset, largerOffset));
+            Assert.AreEqual(largerOffset, result);
+        }
+
+        [Test]
+        public void Min()
+        {
+            var smallerOffset = Offset.FromHours(3);
+            var largerOffset = Offset.FromHours(5);
+            var result = Snippet.For(Offset.Min(smallerOffset, largerOffset));
+            Assert.AreEqual(smallerOffset, result);
+        }
+
+        [Test]
+        public void Negate()
+        {
+            var offsetToNegate = Offset.FromHours(2);
+            var result = Snippet.For(Offset.Negate(offsetToNegate));
+            Assert.AreEqual(Offset.FromHours(-2), result);
+        }
 
         [Test]
         public void Plus()
@@ -68,7 +140,6 @@ namespace NodaTime.Demo
             var offset = Offset.FromSeconds(100);
             var offset2 = Offset.FromSeconds(150);
             var expected = Offset.FromSeconds(250);
-
             var actual = Snippet.For(offset.Plus(offset2));
 
             Assert.AreEqual(expected, actual);
@@ -80,7 +151,6 @@ namespace NodaTime.Demo
             var offset = Offset.FromSeconds(100);
             var offset2 = Offset.FromSeconds(120);
             var expected = Offset.FromSeconds(-20);
-
             var actual = Snippet.For(offset.Minus(offset2));
 
             Assert.AreEqual(expected, actual);
@@ -94,6 +164,6 @@ namespace NodaTime.Demo
             var expected = TimeSpan.FromSeconds(120);
 
             Assert.AreEqual(expected, actual);
-        }
+        }       
     }
 }

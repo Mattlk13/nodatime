@@ -157,6 +157,7 @@ namespace NodaTime.TimeZones
         /// Gets the first Instant that the Offset applies.
         /// </summary>
         /// <value>The first Instant that the Offset applies.</value>
+        /// <exception cref="InvalidOperationException">The interval extends to the start of time.</exception>
         public Instant Start
         {
             [DebuggerStepThrough]
@@ -197,7 +198,8 @@ namespace NodaTime.TimeZones
         internal ZoneInterval(string name, Instant start, Instant end, Offset wallOffset, Offset savings)
         {
             Preconditions.CheckNotNull(name, nameof(name));
-            Preconditions.CheckArgument(start < end, nameof(start), "The start Instant must be less than the end Instant");
+            Preconditions.CheckArgument(start < end, nameof(start),
+                "The start Instant must be less than the end Instant. start: {0}; end: {1}", start, end);
             this.Name = name;
             this.RawStart = start;
             this.RawEnd = end;
@@ -283,17 +285,35 @@ namespace NodaTime.TimeZones
             return Name == other.Name && RawStart == other.RawStart && RawEnd == other.RawEnd
                 && WallOffset == other.WallOffset && Savings == other.Savings;
         }
+
+        /// <summary>
+        /// Implements the operator == (equality).
+        /// See the type documentation for a description of equality semantics.
+        /// </summary>
+        /// <param name="left">The left hand side of the operator.</param>
+        /// <param name="right">The right hand side of the operator.</param>
+        /// <returns><c>true</c> if values are equal to each other, otherwise <c>false</c>.</returns>
+        public static bool operator ==(ZoneInterval? left, ZoneInterval? right) => ReferenceEquals(left, right) || (left is object && left.Equals(right));
+
+        /// <summary>
+        /// Implements the operator != (inequality).
+        /// See the type documentation for a description of equality semantics.
+        /// </summary>
+        /// <param name="left">The left hand side of the operator.</param>
+        /// <param name="right">The right hand side of the operator.</param>
+        /// <returns><c>true</c> if values are not equal to each other, otherwise <c>false</c>.</returns>
+        public static bool operator !=(ZoneInterval? left, ZoneInterval? right) => !(left == right);
         #endregion
 
         #region object Overrides
         /// <summary>
-        /// Determines whether the specified <see cref="T:System.Object" /> is equal to the current <see cref="T:System.Object" />.
+        /// Determines whether the specified <see cref="System.Object" /> is equal to the current <see cref="System.Object" />.
         /// See the type documentation for a description of equality semantics.
         /// </summary>
         /// <returns>
-        /// <c>true</c> if the specified <see cref="T:System.Object" /> is equal to the current <see cref="T:System.Object" />; otherwise, <c>false</c>.
+        /// <c>true</c> if the specified <see cref="System.Object" /> is equal to the current <see cref="System.Object" />; otherwise, <c>false</c>.
         /// </returns>
-        /// <param name="obj">The <see cref="T:System.Object" /> to compare with the current <see cref="T:System.Object" />.</param>
+        /// <param name="obj">The <see cref="System.Object" /> to compare with the current <see cref="System.Object" />.</param>
         /// <filterpriority>2</filterpriority>
         [DebuggerStepThrough]
         public override bool Equals(object? obj) => Equals(obj as ZoneInterval);

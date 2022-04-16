@@ -1,26 +1,20 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netcoreapp2.0;netcoreapp2.1;net471;netcoreapp3.0</TargetFrameworks>
+    <TargetFrameworks>net471;netcoreapp3.1;net6.0</TargetFrameworks>
     <OutputType>Exe</OutputType>
-    <AssemblyOriginatorKeyFile>../../NodaTime Release.snk</AssemblyOriginatorKeyFile>
-    <SignAssembly>true</SignAssembly>
-    <Deterministic>True</Deterministic>
-    <IsPackable>False</IsPackable>
-    <LangVersion>preview</LangVersion>
-    <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <WarningsAsErrors />
+    <LangVersion>8</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NodaTime\NodaTime.csproj" />
     <ProjectReference Include="..\NodaTime.Testing\NodaTime.Testing.csproj" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.0" PrivateAssets="All" IncludeAssets="runtime; build; native; contentfiles; analyzers" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BenchmarkDotNet" Version="0.10.14" />
-    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+    <PackageReference Include="BenchmarkDotNet" Version="0.13.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>
 
 </Project>

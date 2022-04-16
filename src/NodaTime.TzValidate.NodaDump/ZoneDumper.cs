@@ -119,8 +119,8 @@ namespace NodaTime.TzValidate.NodaDump
                 writer.Write($"Options: {string.Join(", ", optionsList)}\n");
             }
             writer.Write($"Range: {options.FromYear ?? 1}-{options.ToYear}\n");
-            writer.Write($"Generator: {typeof(Program).GetTypeInfo().Assembly.GetName().Name}\n");
-            writer.Write($"GeneratorUrl: https://github.com/nodatime/nodatime\n");
+            writer.Write($"Generator: {typeof(Program).Assembly.GetName().Name}\n");
+            writer.Write("GeneratorUrl: https://github.com/nodatime/nodatime\n");
             writer.Write("\n");
         }
 

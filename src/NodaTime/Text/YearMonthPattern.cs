@@ -24,14 +24,16 @@ namespace NodaTime.Text
     {
         internal static readonly YearMonth DefaultTemplateValue = new YearMonth(2000, 1);
 
-        private const string DefaultFormatPattern = "g"; // General (ISO)
+        private const string IsoFormatPattern = "g"; // General (ISO)
+
+        internal const string CultureDefaultFormatPattern = "G"; // General (culture-specific)
 
         internal static readonly PatternBclSupport<YearMonth> BclSupport =
-            new PatternBclSupport<YearMonth>(DefaultFormatPattern, fi => fi.YearMonthPatternParser);
+            new PatternBclSupport<YearMonth>(IsoFormatPattern, fi => fi.YearMonthPatternParser);
 
         /// <summary>
         /// Gets an invariant year/month pattern which is ISO-8601 compatible.
-        /// This corresponds to the text pattern "uuuu'-'MM.
+        /// This corresponds to the text pattern "uuuu'-'MM".
         /// </summary>
         /// <remarks>
         /// This pattern corresponds to the 'g' standard pattern.
@@ -142,7 +144,7 @@ namespace NodaTime.Text
         /// <param name="templateValue">Template value to use for unspecified fields</param>
         /// <returns>A pattern for parsing and formatting year/months.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static YearMonthPattern Create(string patternText, CultureInfo cultureInfo, YearMonth templateValue) =>
+        public static YearMonthPattern Create(string patternText, [ValidatedNotNull] CultureInfo cultureInfo, YearMonth templateValue) =>
             Create(patternText, NodaFormatInfo.GetFormatInfo(cultureInfo), templateValue);
 
         /// <summary>
@@ -201,7 +203,7 @@ namespace NodaTime.Text
         /// </summary>
         /// <param name="cultureInfo">The culture to use in the new pattern.</param>
         /// <returns>A new pattern with the given culture.</returns>
-        public YearMonthPattern WithCulture(CultureInfo cultureInfo) =>
+        public YearMonthPattern WithCulture([ValidatedNotNull] CultureInfo cultureInfo) =>
             WithFormatInfo(NodaFormatInfo.GetFormatInfo(cultureInfo));
 
         /// <summary>

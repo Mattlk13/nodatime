@@ -55,12 +55,13 @@ namespace NodaTime
     /// Various operations accept or return a <see cref="Double"/>, in-keeping with durations often being natural lengths
     /// of time which are imprecisely measured anyway. The implementation of these operations should never result in a not-a-number
     /// or infinite value, nor do any operations accept not-a-number or infinite values. Additionally, operations involving
-    /// <c>Double</c> have initially been implemented fairly naïvely; it's possible that future releases will improve the accuracy
+    /// <c>Double</c> have initially been implemented fairly naively; it's possible that future releases will improve the accuracy
     /// or performance (or both) of various operations.
     /// </para>
     /// </remarks>
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
     [TypeConverter(typeof(DurationTypeConverter))]
+    [XmlSchemaProvider(nameof(AddSchema))]
     public readonly struct Duration : IEquatable<Duration>, IComparable<Duration>, IComparable, IXmlSerializable, IFormattable
     {
         // This is one more bit than we really need, but it allows Instant.BeforeMinValue and Instant.AfterMaxValue
@@ -126,6 +127,7 @@ namespace NodaTime
         // NanosecondsPerDay - 1, for example.)
         private readonly long nanoOfDay;
 
+#pragma warning disable CA1801 // Remove/use unused parameter
         // Trusted constructor with no validation. The value of the noValidation parameter is
         // ignored completely; its name is just to be suggestive.
         private Duration([Trusted] int days, [Trusted] long nanoOfDay, bool noValidation)
@@ -133,6 +135,7 @@ namespace NodaTime
             this.days = days;
             this.nanoOfDay = nanoOfDay;
         }
+#pragma warning restore CA1801
 
         // Implementation note: I've tried making this internal and calling it directly from Instant.FromUnixTimeSeconds etc?
         // That reduces the number of range checks, but doesn't seem to affect the performance in a significant way.
@@ -453,12 +456,12 @@ namespace NodaTime
         /// Formats the value of the current instance using the specified pattern.
         /// </summary>
         /// <returns>
-        /// A <see cref="T:System.String" /> containing the value of the current instance in the specified format.
+        /// A <see cref="System.String" /> containing the value of the current instance in the specified format.
         /// </returns>
-        /// <param name="patternText">The <see cref="T:System.String" /> specifying the pattern to use,
+        /// <param name="patternText">The <see cref="System.String" /> specifying the pattern to use,
         /// or null to use the default format pattern ("o").
         /// </param>
-        /// <param name="formatProvider">The <see cref="T:System.IFormatProvider" /> to use when formatting the value,
+        /// <param name="formatProvider">The <see cref="System.IFormatProvider" /> to use when formatting the value,
         /// or null to use the current thread's culture to obtain a format provider.
         /// </param>
         /// <filterpriority>2</filterpriority>
@@ -850,7 +853,7 @@ namespace NodaTime
         /// <returns>The result of comparing this instant with another one; see <see cref="CompareTo(NodaTime.Duration)"/> for general details.
         /// If <paramref name="obj"/> is null, this method returns a value greater than 0.
         /// </returns>
-        int IComparable.CompareTo(object obj)
+        int IComparable.CompareTo(object? obj)
         {
             if (obj is null)
             {
@@ -1123,6 +1126,13 @@ namespace NodaTime
         public TimeSpan ToTimeSpan() => new TimeSpan(BclCompatibleTicks);
 
         #region XML serialization
+        /// <summary>
+        /// Adds the XML schema type describing the structure of the <see cref="Duration"/> XML serialization to the given <paramref name="xmlSchemaSet"/>.
+        /// </summary>
+        /// <param name="xmlSchemaSet">The XML schema set provided by <see cref="XmlSchemaExporter"/>.</param>
+        /// <returns>The qualified name of the schema type that was added to the <paramref name="xmlSchemaSet"/>.</returns>
+        public static XmlQualifiedName AddSchema(XmlSchemaSet xmlSchemaSet) => Xml.XmlSchemaDefinition.AddDurationSchemaType(xmlSchemaSet);
+
         /// <inheritdoc />
         XmlSchema IXmlSerializable.GetSchema() => null!; // TODO(nullable): Return XmlSchema? when docfx works with that
 

@@ -13,7 +13,6 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 
 namespace NodaTime.TimeZones
@@ -46,10 +45,10 @@ namespace NodaTime.TimeZones
 
             private static TzdbStreamData LoadDefaultDataSource()
             {
-                var assembly = typeof(DefaultHolder).GetTypeInfo().Assembly;
-                using (Stream stream = assembly.GetManifestResourceStream("NodaTime.TimeZones.Tzdb.nzd"))
+                var assembly = typeof(DefaultHolder).Assembly;
+                using (Stream stream = assembly.GetManifestResourceStream("NodaTime.TimeZones.Tzdb.nzd")!)
                 {
-                    return TzdbStreamData.FromStream(stream);
+                    return TzdbStreamData.FromStream(stream!);
                 }
             }
         }
@@ -141,7 +140,7 @@ namespace NodaTime.TimeZones
         /// directly from the <see cref="TzdbVersion"/> and <see cref="WindowsZones.Version"/> properties.
         /// </para>
         /// </remarks>
-        public string VersionId => "TZDB: " + version;
+        public string VersionId => $"TZDB: {version}";
 
         /// <summary>
         /// Creates an instance from a stream in the custom Noda Time format. The stream must be readable.
@@ -177,7 +176,7 @@ namespace NodaTime.TimeZones
                 .Where(pair => pair.Key != pair.Value)
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .ToLookup(pair => pair.Value, pair => pair.Key);
-            version = source.TzdbVersion + " (mapping: " + source.WindowsMapping.Version + ")";
+            version = $"{source.TzdbVersion} (mapping: {source.WindowsMapping.Version})";
             tzdbToWindowsId = new Lazy<IReadOnlyDictionary<string, string>>(BuildTzdbToWindowsIdMap, LazyThreadSafetyMode.ExecutionAndPublication);
             windowsToTzdbId = new Lazy<IReadOnlyDictionary<string, string>>(BuildWindowsToTzdbId, LazyThreadSafetyMode.ExecutionAndPublication);
         }
@@ -239,9 +238,9 @@ namespace NodaTime.TimeZones
         /// <inheritdoc />
         public DateTimeZone ForId(string id)
         {
-            if (!CanonicalIdMap.TryGetValue(Preconditions.CheckNotNull(id, nameof(id)), out string canonicalId))
+            if (!CanonicalIdMap.TryGetValue(Preconditions.CheckNotNull(id, nameof(id)), out string? canonicalId))
             {
-                throw new ArgumentException("Time zone with ID " + id + " not found in source " + version, nameof(id));
+                throw new ArgumentException($"Time zone with ID {id} not found in source {version}", nameof(id));
             }
             return source.CreateZone(id, canonicalId);
         }
@@ -263,7 +262,7 @@ namespace NodaTime.TimeZones
             }
             string id = timeZone.Id;
             // First see if it's a Windows time zone ID.
-            if (source.WindowsMapping.PrimaryMapping.TryGetValue(id, out string result))
+            if (source.WindowsMapping.PrimaryMapping.TryGetValue(id, out string? result))
             {
                 return result;
             }
@@ -280,10 +279,8 @@ namespace NodaTime.TimeZones
         private readonly ConcurrentDictionary<string, string?> guesses = new ConcurrentDictionary<string, string?>();
 
         // Cache around GuessZoneIdByTransitionsUncached
-        private string? GuessZoneIdByTransitions(TimeZoneInfo zone)
-        {
-            // FIXME: Stop using StandardName! (We have Id now...)
-            return guesses.GetOrAdd(zone.StandardName, _ =>
+        private string? GuessZoneIdByTransitions(TimeZoneInfo zone) =>
+            guesses.GetOrAdd(zone.Id, _ =>
             {
                 // Build the list of candidates here instead of within the method, so that
                 // tests can pass in the same list on each iteration. We order the time zones
@@ -292,7 +289,6 @@ namespace NodaTime.TimeZones
                 var candidates = CanonicalIdMap.Values.Select(ForId).OrderBy(dtz => dtz.Id).ToList();
                 return GuessZoneIdByTransitionsUncached(zone, candidates);
             });
-        }
 
         /// <summary>
         /// In cases where we can't get a zone mapping directly, we try to work out a good fit
@@ -308,7 +304,7 @@ namespace NodaTime.TimeZones
         /// <param name="zone">Zone to resolve in a best-effort fashion.</param>
         /// <param name="candidates">All the Noda Time zones to consider - normally a list 
         /// obtained from this source.</param>
-        internal string? GuessZoneIdByTransitionsUncached(TimeZoneInfo zone, List<DateTimeZone> candidates)
+        internal static string? GuessZoneIdByTransitionsUncached(TimeZoneInfo zone, List<DateTimeZone> candidates)
         {
             // See https://github.com/nodatime/nodatime/issues/686 for performance observations.
             // Very rare use of the system clock! Windows time zone updates sometimes sacrifice past
@@ -419,7 +415,7 @@ namespace NodaTime.TimeZones
             // should be such that y maps to itself.)
             foreach (var entry in CanonicalIdMap)
             {
-                if (!CanonicalIdMap.TryGetValue(entry.Value, out string canonical))
+                if (!CanonicalIdMap.TryGetValue(entry.Value, out string? canonical))
                 {
                     throw new InvalidNodaDataException(
                         $"Mapping for entry {entry.Key} ({entry.Value}) is missing");

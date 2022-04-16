@@ -6,6 +6,13 @@ using NodaTime.Annotations;
 using NodaTime.Utility;
 using System;
 
+// Standard exception constructors: we don't *want* those constructors.
+// The single constructor provided in this class populates the message and
+// accepts the required parameters for populating other properties.
+// There are never any other causes to the exception, at least that I can
+// envisage for the moment.
+#pragma warning disable CA1032
+
 namespace NodaTime
 {
     /// <summary>
@@ -58,7 +65,7 @@ namespace NodaTime
         /// <param name="localDateTime">The local date/time which is skipped in the specified time zone.</param>
         /// <param name="zone">The time zone in which the local date/time does not exist.</param>
         public SkippedTimeException(LocalDateTime localDateTime, DateTimeZone zone)
-            : base("Local time " + localDateTime + " is invalid in time zone " + Preconditions.CheckNotNull(zone, nameof(zone)).Id)
+            : base($"Local time {localDateTime} is invalid in time zone {Preconditions.CheckNotNull(zone, nameof(zone)).Id}")
         {
             this.LocalDateTime = localDateTime;
             this.Zone = zone;

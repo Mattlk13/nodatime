@@ -34,6 +34,7 @@ namespace NodaTime
     /// </remarks>
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
     [TypeConverter(typeof(LocalDateTypeConverter))]
+    [XmlSchemaProvider(nameof(AddSchema))]
     public readonly struct LocalDate : IEquatable<LocalDate>, IComparable<LocalDate>, IComparable, IFormattable, IXmlSerializable
     {
         private readonly YearMonthDayCalendar yearMonthDayCalendar;
@@ -139,7 +140,9 @@ namespace NodaTime
 
         /// <summary>Gets the calendar system associated with this local date.</summary>
         /// <value>The calendar system associated with this local date.</value>
-        public CalendarSystem Calendar => CalendarSystem.ForOrdinal(yearMonthDayCalendar.CalendarOrdinal);
+        public CalendarSystem Calendar => CalendarSystem.ForOrdinal(CalendarOrdinal);
+
+        private CalendarOrdinal CalendarOrdinal => yearMonthDayCalendar.CalendarOrdinal;
 
         /// <summary>Gets the year of this local date.</summary>
         /// <remarks>This returns the "absolute year", so, for the ISO calendar,
@@ -195,10 +198,18 @@ namespace NodaTime
         /// by this value.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <see cref="DateTimeKind.Unspecified"/> is slightly odd - it can be treated as UTC if you use <see cref="DateTime.ToLocalTime"/>
         /// or as system local time if you use <see cref="DateTime.ToUniversalTime"/>, but it's the only kind which allows
         /// you to construct a <see cref="DateTimeOffset"/> with an arbitrary offset, which makes it as close to
         /// the Noda Time non-system-specific "local" concept as exists in .NET.
+        /// </para>
+        /// <para>
+        /// <see cref="DateTime"/> uses the Gregorian calendar by definition, so the value is implicitly converted
+        /// to the Gregorian calendar first. The result will be on the same physical day,
+        /// but the values returned by the Year/Month/Day properties of the <see cref="DateTime"/> may not
+        /// match the Year/Month/Day properties of this value.
+        /// </para>
         /// </remarks>
         /// <returns>A <see cref="DateTime"/> value for the same date and time as this value.</returns>
         [Pure]
@@ -232,6 +243,7 @@ namespace NodaTime
         /// <returns>A new <see cref="LocalDate"/> with the same values as the specified <c>DateTime</c>.</returns>
         public static LocalDate FromDateTime(DateTime dateTime, CalendarSystem calendar)
         {
+            Preconditions.CheckNotNull(calendar, nameof(calendar));
             int days = NonNegativeTicksToDays(dateTime.Ticks) - NodaConstants.BclDaysAtUnixEpoch;
             return new LocalDate(days, calendar);
         }
@@ -444,8 +456,8 @@ namespace NodaTime
         /// <returns>true if the <paramref name="lhs"/> is strictly earlier than <paramref name="rhs"/>, false otherwise.</returns>
         public static bool operator <(LocalDate lhs, LocalDate rhs)
         {
-            Preconditions.CheckArgument(lhs.Calendar.Equals(rhs.Calendar), nameof(rhs), "Only values in the same calendar can be compared");
-            return lhs.CompareTo(rhs) < 0;
+            Preconditions.CheckArgument(lhs.CalendarOrdinal == rhs.CalendarOrdinal, nameof(rhs), "Only values in the same calendar can be compared");
+            return lhs.TrustedCompareTo(rhs) < 0;
         }
 
         /// <summary>
@@ -459,8 +471,8 @@ namespace NodaTime
         /// <returns>true if the <paramref name="lhs"/> is earlier than or equal to <paramref name="rhs"/>, false otherwise.</returns>
         public static bool operator <=(LocalDate lhs, LocalDate rhs)
         {
-            Preconditions.CheckArgument(lhs.Calendar.Equals(rhs.Calendar), nameof(rhs), "Only values in the same calendar can be compared");
-            return lhs.CompareTo(rhs) <= 0;
+            Preconditions.CheckArgument(lhs.CalendarOrdinal == rhs.CalendarOrdinal, nameof(rhs), "Only values in the same calendar can be compared");
+            return lhs.TrustedCompareTo(rhs) <= 0;
         }
 
         /// <summary>
@@ -474,8 +486,8 @@ namespace NodaTime
         /// <returns>true if the <paramref name="lhs"/> is strictly later than <paramref name="rhs"/>, false otherwise.</returns>
         public static bool operator >(LocalDate lhs, LocalDate rhs)
         {
-            Preconditions.CheckArgument(lhs.Calendar.Equals(rhs.Calendar), nameof(rhs), "Only values in the same calendar can be compared");
-            return lhs.CompareTo(rhs) > 0;
+            Preconditions.CheckArgument(lhs.CalendarOrdinal == rhs.CalendarOrdinal, nameof(rhs), "Only values in the same calendar can be compared");
+            return lhs.TrustedCompareTo(rhs) > 0;
         }
 
         /// <summary>
@@ -489,8 +501,8 @@ namespace NodaTime
         /// <returns>true if the <paramref name="lhs"/> is later than or equal to <paramref name="rhs"/>, false otherwise.</returns>
         public static bool operator >=(LocalDate lhs, LocalDate rhs)
         {
-            Preconditions.CheckArgument(lhs.Calendar.Equals(rhs.Calendar), nameof(rhs), "Only values in the same calendar can be compared");
-            return lhs.CompareTo(rhs) >= 0;
+            Preconditions.CheckArgument(lhs.CalendarOrdinal == rhs.CalendarOrdinal, nameof(rhs), "Only values in the same calendar can be compared");
+            return lhs.TrustedCompareTo(rhs) >= 0;
         }
 
         /// <summary>
@@ -505,9 +517,15 @@ namespace NodaTime
         /// later than <paramref name="other"/>.</returns>
         public int CompareTo(LocalDate other)
         {
-            Preconditions.CheckArgument(Calendar.Equals(other.Calendar), nameof(other), "Only values with the same calendar system can be compared");
-            return Calendar.Compare(YearMonthDay, other.YearMonthDay);
+            Preconditions.CheckArgument(CalendarOrdinal == other.CalendarOrdinal, nameof(other), "Only values with the same calendar system can be compared");
+            return TrustedCompareTo(other);
         }
+
+        /// <summary>
+        /// Performs a comparison with another date, trusting that the calendar of the other date is already correct.
+        /// This avoids duplicate calendar checks.
+        /// </summary>
+        private int TrustedCompareTo([Trusted] LocalDate other) => Calendar.Compare(YearMonthDay, other.YearMonthDay);
 
         /// <summary>
         /// Implementation of <see cref="IComparable.CompareTo"/> to compare two LocalDates.
@@ -522,7 +540,7 @@ namespace NodaTime
         /// <returns>The result of comparing this LocalDate with another one.
         /// If <paramref name="obj"/> is null, this method returns a value greater than 0.
         /// </returns>
-        int IComparable.CompareTo(object obj)
+        int IComparable.CompareTo(object? obj)
         {
             if (obj is null)
             {
@@ -800,12 +818,12 @@ namespace NodaTime
         /// Formats the value of the current instance using the specified pattern.
         /// </summary>
         /// <returns>
-        /// A <see cref="T:System.String" /> containing the value of the current instance in the specified format.
+        /// A <see cref="System.String" /> containing the value of the current instance in the specified format.
         /// </returns>
-        /// <param name="patternText">The <see cref="T:System.String" /> specifying the pattern to use,
+        /// <param name="patternText">The <see cref="System.String" /> specifying the pattern to use,
         /// or null to use the default format pattern ("D").
         /// </param>
-        /// <param name="formatProvider">The <see cref="T:System.IFormatProvider" /> to use when formatting the value,
+        /// <param name="formatProvider">The <see cref="System.IFormatProvider" /> to use when formatting the value,
         /// or null to use the current thread's culture to obtain a format provider.
         /// </param>
         /// <filterpriority>2</filterpriority>
@@ -814,6 +832,14 @@ namespace NodaTime
         #endregion Formatting
 
         #region XML serialization
+        /// <summary>
+        /// Adds the XML schema type describing the structure of the <see cref="LocalTime"/> XML serialization to the given <paramref name="xmlSchemaSet"/>.
+        /// the <paramref name="xmlSchemaSet"/>.
+        /// </summary>
+        /// <param name="xmlSchemaSet">The XML schema set provided by <see cref="XmlSchemaExporter"/>.</param>
+        /// <returns>The qualified name of the schema type that was added to the <paramref name="xmlSchemaSet"/>.</returns>
+        public static XmlQualifiedName AddSchema(XmlSchemaSet xmlSchemaSet) => Xml.XmlSchemaDefinition.AddLocalDateSchemaType(xmlSchemaSet);
+
         /// <inheritdoc />
         XmlSchema IXmlSerializable.GetSchema() => null!; // TODO(nullable): Return XmlSchema? when docfx works with that
 
@@ -845,5 +871,30 @@ namespace NodaTime
             writer.WriteString(LocalDatePattern.Iso.Format(this));
         }
         #endregion
+
+        #region DateOnly conversions (.NET 6 only)
+#if NET6_0_OR_GREATER
+        /// <summary>
+        /// Converts this value to an equivalent <see cref="DateOnly"/>.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="DateOnly"/> uses the Gregorian calendar by definition, so the value is implicitly converted
+        /// to the Gregorian calendar first. The result will be on the same physical day,
+        /// but the values returned by the Year/Month/Day properties of the <see cref="DateTime"/> may not
+        /// match the Year/Month/Day properties of this value.
+        /// </remarks>
+        /// <returns>A <see cref="DateOnly"/> value equivalent to this one.</returns>
+        [Pure]
+        public DateOnly ToDateOnly() => DateOnly.FromDayNumber(DaysSinceEpoch + NodaConstants.BclDaysAtUnixEpoch);
+
+        /// <summary>
+        /// Constructs a <see cref="LocalDate"/> from a <see cref="DateOnly"/>.
+        /// </summary>
+        /// <param name="date">The date to convert.</param>
+        /// <returns>The <see cref="LocalDate"/> equivalent, which is always in the ISO calendar system.</returns>
+        public static LocalDate FromDateOnly(DateOnly date) =>
+            new LocalDate(CalendarSystem.Iso.GetYearMonthDayCalendarFromDaysSinceEpoch(date.DayNumber - NodaConstants.BclDaysAtUnixEpoch));
+#endif
+#endregion
     }
 }

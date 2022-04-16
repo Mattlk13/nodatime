@@ -100,7 +100,7 @@ namespace NodaTime.Test.Text
         {
             var pattern = CreatePartialPattern();
             Assert.IsNull(Message);
-            var cursor = new ValueCursor("^" + Text + "#");
+            var cursor = new ValueCursor($"^{Text}#");
             // Move to the ^
             cursor.MoveNext();
             // Move to the start of the text
@@ -122,7 +122,7 @@ namespace NodaTime.Test.Text
             var pattern = CreatePattern();
             var builder = new StringBuilder("x");
             pattern.AppendFormat(Value, builder);
-            Assert.AreEqual("x" + Text, builder.ToString());
+            Assert.AreEqual($"x{Text}", builder.ToString());
         }
 
         internal void TestInvalidPattern()
@@ -145,7 +145,7 @@ namespace NodaTime.Test.Text
             string expectedMessage = FormatMessage(Message!, Parameters.ToArray());
             IPattern<T> pattern = CreatePattern();
             var result = pattern.Parse(Text!);
-            Assert.IsFalse(result.Success, "Expected parsing to failed, but it succeeded");
+            Assert.IsFalse(result.Success, "Expected parsing to fail, but it succeeded");
             try
             {
                 result.GetValueOrThrow();

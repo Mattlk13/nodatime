@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eu -o pipefail
 
 cd $(dirname $0)
 
@@ -28,11 +28,14 @@ mkdir old
 mkdir output
 declare -r OUTPUT="$(realpath $PWD/output)"
 
-# Work out the current release, fetch and extract it
+# Work out the current release, fetch and extract it.
+# We use "ls -l" to include the release date in the listing,
+# then sed to remove the file size part, then reverse sort.
 declare -r RELEASE=$(\
-    $GSUTIL ls gs://nodatime/releases | \
-    grep -o -E 'NodaTime-2\.4\.[0-9]+\.zip' | \
+    $GSUTIL ls -l gs://nodatime/releases | \
+    sed -E 's/^ +[0-9]+ +//g' | \
     sort -r | \
+    grep -o -E 'NodaTime-2\.4\.[0-9]+\.zip' | \
     head -n 1 | \
     sed s/NodaTime-// | \
     sed s/.zip//)
@@ -57,6 +60,9 @@ cp "${ROOT}/src/NodaTime/TimeZones/Tzdb.nzd" src/NodaTime/TimeZones
 # Commit and tag the change
 git commit -a -m "Update to TZDB ${TZDB_RELEASE} for release ${NEW_RELEASE}"
 git tag ${NEW_RELEASE}
+
+# Make sure the packages end up with suitable embedded paths
+export ContinuousIntegrationBuild=true
 
 # Build the code
 dotnet restore src/NodaTime-All.sln

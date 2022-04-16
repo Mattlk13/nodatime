@@ -8,6 +8,7 @@ using NodaTime.Tools.Common;
 using System;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using static NodaTime.TimeZones.IO.TzdbStreamFieldId;
 using static System.FormattableString;
 
@@ -20,14 +21,14 @@ namespace NodaTime.NzdPrinter
     /// </summary>
     public class Program
     {
-        static int Main(string[] args)
+        static async Task<int> Main(string[] args)
         {
             if (args.Length != 1)
             {
                 Console.WriteLine("Usage: NodaTime.NzdPrinter <path/url to nzd file>");
                 return 1;
             }
-            var stream = new MemoryStream(FileUtility.LoadFileOrUrl(args[0]));
+            var stream = new MemoryStream(await FileUtility.LoadFileOrUrlAsync(args[0]));
             int version = new BinaryReader(stream).ReadInt32();
             Console.WriteLine($"File format version: {version}");
             string[]? stringPool = null; // In a valid file, this will be non-null before it's used for any non-string-pool field.
@@ -119,7 +120,7 @@ namespace NodaTime.NzdPrinter
                 var offset = reader.ReadOffset();
                 var savings = reader.ReadOffset();
                 var nextStart = reader.ReadZoneIntervalTransition(start);
-                Console.WriteLine(Invariant($"  {start:yyyy-MM-dd'T'HH:mm:ss} - {nextStart:yyyy-MM-dd'T'HH:mm:ss}; wall offset: {offset}; savings: {savings}; name: {name}"));
+                Console.WriteLine(Invariant($"  {start:uuuu-MM-dd'T'HH:mm:ss} - {nextStart:uuuu-MM-dd'T'HH:mm:ss}; wall offset: {offset}; savings: {savings}; name: {name}"));
                 start = nextStart;
             }
             if (reader.ReadByte() == 1)

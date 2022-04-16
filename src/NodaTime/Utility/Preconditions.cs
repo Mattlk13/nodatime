@@ -5,6 +5,7 @@
 using JetBrains.Annotations;
 using System;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace NodaTime.Utility
 {
@@ -28,8 +29,7 @@ namespace NodaTime.Utility
         }
 
         /// <summary>
-        /// Like <see cref="Preconditions.CheckNotNull"/>, but only checked in debug builds. (This means it can't return
-        /// anything...)
+        /// Like <see cref="CheckNotNull{T}"/>, but only checked in debug builds. (This means it can't return anything...)
         /// </summary>
         [Conditional("DEBUG")]
         [ContractAnnotation("argument:null => halt")]
@@ -76,6 +76,14 @@ namespace NodaTime.Utility
                 $"Value should be in range [{minInclusive}-{maxInclusive}]");
         }
 
+        // This method exists for cases where we know we want to throw an exception, but we need the compiler to think it
+        // *could* return something. (Typically switch expressions.)
+        internal static T ThrowArgumentOutOfRangeExceptionWithReturn<T>([InvokerParameterName] string paramName, T value, T minInclusive, T maxInclusive)
+        {
+            throw new ArgumentOutOfRangeException(paramName, value,
+                $"Value should be in range [{minInclusive}-{maxInclusive}]");
+        }
+
         /// <summary>
         /// Range change to perform just within debug builds. This is typically for internal sanity checking, where we normally
         /// trusting the argument value to be valid, and adding a check just for the sake of documentation - and to help find
@@ -115,7 +123,7 @@ namespace NodaTime.Utility
 #if DEBUG
             if (!expression)
             {
-                string message = string.Format(messageFormat, messageArgs);
+                string message = string.Format(CultureInfo.CurrentCulture, messageFormat, messageArgs);
                 throw new DebugPreconditionException($"{message} (parameter name: {parameter})");
             }
 #endif
@@ -136,7 +144,7 @@ namespace NodaTime.Utility
         {
             if (!expression)
             {
-                string message = string.Format(messageFormat, messageArg);
+                string message = string.Format(CultureInfo.CurrentCulture, messageFormat, messageArg);
                 throw new ArgumentException(message, parameter);
             }
         }
@@ -147,7 +155,7 @@ namespace NodaTime.Utility
         {
             if (!expression)
             {
-                string message = string.Format(messageFormat, messageArg1, messageArg2);
+                string message = string.Format(CultureInfo.CurrentCulture, messageFormat, messageArg1, messageArg2);
                 throw new ArgumentException(message, parameter);
             }
         }
@@ -174,6 +182,9 @@ namespace NodaTime.Utility
     }
 
 #if DEBUG
+// This is an internal exception very deliberately, and we don't need other constructor forms.
+#pragma warning disable CA1032 // Standard exception constructors
+#pragma warning disable CA1064 // Exceptions should be public
     /// <summary>
     /// Exception which occurs only for preconditions violated in debug mode. This is
     /// thrown from the Preconditions.Debug* methods to avoid them throwing exceptions
@@ -188,5 +199,7 @@ namespace NodaTime.Utility
         {
         }
     }
+#pragma warning restore CA1064
+#pragma warning restore CA1032
 #endif
 }

@@ -12,10 +12,13 @@ namespace NodaTime.Benchmarks.NodaTimeTests
     public class LocalDateBenchmarks
     {
         private static readonly LocalDate Sample = new LocalDate(2009, 12, 26);
+#if NET6_0_OR_GREATER
+        private static readonly DateOnly SampleDateOnly = new DateOnly(2009, 12, 26);
+#endif
         private static readonly DateTime SampleDateTime = new DateTime(2009, 12, 26, 1, 2, 3, DateTimeKind.Utc);
         private static readonly LocalDate SampleBeforeEpoch = new LocalDate(1909, 12, 26);
 
-        private static readonly LocalDatePattern Pattern = LocalDatePattern.CreateWithInvariantCulture("dd/MM/yyyy");
+        private static readonly LocalDatePattern Pattern = LocalDatePattern.CreateWithInvariantCulture("dd/MM/uuuu");
 
         private static readonly Period SamplePeriod = new PeriodBuilder { Years = 1, Months = 2, Weeks = 3, Days = 4 }.Build();
 
@@ -129,5 +132,19 @@ namespace NodaTime.Benchmarks.NodaTimeTests
 
         [Benchmark]
         public LocalDate FromDateTime_WithCalendar() => LocalDate.FromDateTime(SampleDateTime, CalendarSystem.Julian);
+        
+        [Benchmark]
+        public int CompareTo() => Sample.CompareTo(SampleBeforeEpoch);
+
+        [Benchmark]
+        public bool LessThanOperator() => Sample < SampleBeforeEpoch;
+
+#if NET6_0_OR_GREATER
+        [Benchmark]
+        public DateOnly ToDateOnly() => Sample.ToDateOnly();
+
+        [Benchmark]
+        public LocalDate FromDateOnly() => LocalDate.FromDateOnly(SampleDateOnly);
+#endif
     }
 }

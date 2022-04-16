@@ -20,7 +20,7 @@ namespace NodaTime.Test.Annotations
         {
             var implicitlyPureNames = new HashSet<string> { "Equals", "GetHashCode", "CompareTo", "ToString" };
 
-            var impureMethods = typeof(Instant).GetTypeInfo().Assembly
+            var impureMethods = typeof(Instant).Assembly
                                                .DefinedTypes
                                                .Where(t => t.IsValueType && (t.IsPublic || t.IsNestedPublic))
                                                .OrderBy(t => t.Name)
@@ -30,7 +30,7 @@ namespace NodaTime.Test.Annotations
                                                .Where(m => !implicitlyPureNames.Contains(m.Name))
                                                .Where(m => !m.IsDefined(typeof(PureAttribute)));
 
-            TestHelper.AssertNoFailures(impureMethods, m => m.DeclaringType?.Name + "." + m.Name);
+            TestHelper.AssertNoFailures(impureMethods, m => $"{m.DeclaringType?.Name}.{m.Name}");
         }
     }
 }
